@@ -1,0 +1,13 @@
+streamlit
+pandas
+numpy
+plotly
+geopandas
+folium
+streamlit-folium
+beautifulsoup4
+openpyxl
+Pillow
+reportlab
+kaleido
+matplotlib
