@@ -33,6 +33,7 @@ st.set_page_config(
 def create_download_button_for_chart(fig, filename, title=""):
     """
     Fungsi untuk membuat tombol download grafik Plotly dengan judul
+    Menggunakan HTML interaktif (tanpa kaleido) yang kompatibel dengan Streamlit
     
     Parameters:
     - fig: Figure Plotly
@@ -40,6 +41,8 @@ def create_download_button_for_chart(fig, filename, title=""):
     - title: Judul yang akan ditambahkan di atas grafik
     """
     try:
+        import plotly.io as pio
+        
         # Buat salinan figure agar tidak mengubah grafik yang ditampilkan
         fig_copy = go.Figure(fig)
         
@@ -58,17 +61,35 @@ def create_download_button_for_chart(fig, filename, title=""):
         fig_copy.update_layout(
             paper_bgcolor='white',
             plot_bgcolor='white',
-            font=dict(color='#1a1a1a')
+            font=dict(color='#1a1a1a'),
+            width=1600,
+            height=1000
         )
         
-        # Konversi ke gambar PNG dengan resolusi tinggi
-        img_bytes = fig_copy.to_image(format="png", width=1600, height=1000, scale=2)
+        # Konversi ke HTML interaktif yang bisa dibuka di browser
+        html_string = pio.to_html(
+            fig_copy, 
+            include_plotlyjs='cdn',
+            config={
+                'toImageButtonOptions': {
+                    'format': 'png',
+                    'filename': filename,
+                    'height': 1000,
+                    'width': 1600,
+                    'scale': 2
+                },
+                'displayModeBar': True,
+                'displaylogo': False,
+                'modeBarButtonsToAdd': ['downloadImage']
+            }
+        )
         
-        # Encode ke base64 untuk tombol download
-        b64 = base64.b64encode(img_bytes).decode()
+        # Encode ke base64
+        html_bytes = html_string.encode()
+        b64 = base64.b64encode(html_bytes).decode()
         
-        # Buat tombol download dengan HTML
-        href = f'<a href="data:image/png;base64,{b64}" download="{filename}.png" style="text-decoration: none;">' \
+        # Buat tombol download HTML
+        href = f'<a href="data:text/html;base64,{b64}" download="{filename}.html" style="text-decoration: none;">' \
                f'<button style="' \
                f'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);' \
                f'color: white;' \
@@ -84,13 +105,14 @@ def create_download_button_for_chart(fig, filename, title=""):
                f'" ' \
                f'onmouseover="this.style.transform=\'translateY(-2px)\'; this.style.boxShadow=\'0 6px 20px rgba(102, 126, 234, 0.4)\';" ' \
                f'onmouseout="this.style.transform=\'translateY(0)\'; this.style.boxShadow=\'0 4px 12px rgba(102, 126, 234, 0.3)\';">' \
-               f'📥 Download Grafik (PNG)</button></a>'
+               f'📥 Download Grafik (HTML)</button></a>'
         
         st.markdown(href, unsafe_allow_html=True)
+        st.caption("💡 Buka file HTML di browser, lalu gunakan tombol 📷 (camera) untuk download PNG")
         
     except Exception as e:
         st.error(f"⚠️ Tidak dapat membuat tombol download: {str(e)}")
-        st.info("💡 Tip: Gunakan tombol kamera di pojok kanan atas grafik untuk download manual")
+        st.info("💡 Tip: Gunakan tombol kamera 📷 di pojok kanan atas grafik untuk screenshot manual")
 
 def create_static_map_image(data_gdf_merged, title="Peta Sebaran Stunting Per Desa"):
     """
