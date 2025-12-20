@@ -13,6 +13,10 @@ from openpyxl import Workbook
 from openpyxl.cell.cell import MergedCell
 import os
 from PIL import Image
+import io
+import base64
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
 # Konfigurasi halaman
 st.set_page_config(
@@ -21,6 +25,199 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ============================================================================
+# FUNGSI HELPER UNTUK DOWNLOAD GRAFIK
+# ============================================================================
+
+def create_download_button_for_chart(fig, filename, title=""):
+    """
+    Fungsi untuk membuat tombol download grafik Plotly dengan judul
+    
+    Parameters:
+    - fig: Figure Plotly
+    - filename: Nama file output (tanpa ekstensi)
+    - title: Judul yang akan ditambahkan di atas grafik
+    """
+    try:
+        # Buat salinan figure agar tidak mengubah grafik yang ditampilkan
+        fig_copy = go.Figure(fig)
+        
+        # Tambahkan judul jika ada
+        if title:
+            fig_copy.update_layout(
+                title=dict(
+                    text=title,
+                    font=dict(size=24, family='Poppins', color='#667eea'),
+                    x=0.5,
+                    xanchor='center'
+                )
+            )
+        
+        # Tambahkan background putih untuk tampilan yang bersih
+        fig_copy.update_layout(
+            paper_bgcolor='white',
+            plot_bgcolor='white',
+            font=dict(color='#1a1a1a')
+        )
+        
+        # Konversi ke gambar PNG dengan resolusi tinggi
+        img_bytes = fig_copy.to_image(format="png", width=1600, height=1000, scale=2)
+        
+        # Encode ke base64 untuk tombol download
+        b64 = base64.b64encode(img_bytes).decode()
+        
+        # Buat tombol download dengan HTML
+        href = f'<a href="data:image/png;base64,{b64}" download="{filename}.png" style="text-decoration: none;">' \
+               f'<button style="' \
+               f'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);' \
+               f'color: white;' \
+               f'border: none;' \
+               f'border-radius: 12px;' \
+               f'padding: 0.8rem 1.5rem;' \
+               f'font-weight: 600;' \
+               f'font-size: 1rem;' \
+               f'font-family: Poppins, sans-serif;' \
+               f'cursor: pointer;' \
+               f'box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);' \
+               f'transition: all 0.3s ease;' \
+               f'" ' \
+               f'onmouseover="this.style.transform=\'translateY(-2px)\'; this.style.boxShadow=\'0 6px 20px rgba(102, 126, 234, 0.4)\';" ' \
+               f'onmouseout="this.style.transform=\'translateY(0)\'; this.style.boxShadow=\'0 4px 12px rgba(102, 126, 234, 0.3)\';">' \
+               f'📥 Download Grafik (PNG)</button></a>'
+        
+        st.markdown(href, unsafe_allow_html=True)
+        
+    except Exception as e:
+        st.error(f"⚠️ Tidak dapat membuat tombol download: {str(e)}")
+        st.info("💡 Tip: Gunakan tombol kamera di pojok kanan atas grafik untuk download manual")
+
+def create_static_map_image(data_gdf_merged, title="Peta Sebaran Stunting Per Desa"):
+    """
+    Fungsi untuk membuat peta statis menggunakan matplotlib yang bisa didownload
+    
+    Parameters:
+    - data_gdf_merged: GeoDataFrame yang sudah di-merge dengan data stunting
+    - title: Judul peta
+    
+    Returns:
+    - img_bytes: Image dalam format bytes
+    """
+    try:
+        # Buat figure dengan size besar
+        fig, ax = plt.subplots(1, 1, figsize=(20, 16))
+        
+        # Fungsi warna
+        def get_color(persen_stunting):
+            if persen_stunting == 0:
+                return '#e0e0e0'
+            elif persen_stunting < 5:
+                return '#fff3cd'
+            elif persen_stunting < 10:
+                return '#ffcc80'
+            elif persen_stunting < 15:
+                return '#ff8c42'
+            elif persen_stunting < 20:
+                return '#ff6b6b'
+            else:
+                return '#d9534f'
+        
+        # Plot peta
+        data_gdf_merged['color'] = data_gdf_merged['persen_stunting'].apply(get_color)
+        data_gdf_merged.plot(
+            ax=ax,
+            color=data_gdf_merged['color'],
+            edgecolor='#34495e',
+            linewidth=0.5
+        )
+        
+        # Tambahkan label untuk setiap desa
+        for idx, row in data_gdf_merged.iterrows():
+            if row['persen_stunting'] > 0:
+                centroid = row['geometry'].centroid
+                ax.annotate(
+                    text=f"{row['NAMOBJ']}\n{row['persen_stunting']:.1f}%",
+                    xy=(centroid.x, centroid.y),
+                    fontsize=6,
+                    ha='center',
+                    va='center',
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.7, edgecolor='none')
+                )
+        
+        # Styling
+        ax.set_title(title, fontsize=28, fontweight='bold', color='#667eea', pad=20, fontfamily='sans-serif')
+        ax.axis('off')
+        
+        # Legend
+        legend_elements = [
+            mpatches.Patch(facecolor='#e0e0e0', edgecolor='#ccc', label='Tidak ada data'),
+            mpatches.Patch(facecolor='#fff3cd', edgecolor='#ffeeba', label='< 5% (Sangat Rendah)'),
+            mpatches.Patch(facecolor='#ffcc80', edgecolor='#ffb84d', label='5-10% (Rendah)'),
+            mpatches.Patch(facecolor='#ff8c42', edgecolor='#ff7700', label='10-15% (Sedang)'),
+            mpatches.Patch(facecolor='#ff6b6b', edgecolor='#ff5555', label='15-20% (Tinggi)'),
+            mpatches.Patch(facecolor='#d9534f', edgecolor='#c9302c', label='> 20% (Sangat Tinggi)')
+        ]
+        
+        ax.legend(
+            handles=legend_elements,
+            loc='lower left',
+            fontsize=12,
+            title='Prevalensi Stunting',
+            title_fontsize=14,
+            frameon=True,
+            fancybox=True,
+            shadow=True
+        )
+        
+        # Tambahkan watermark
+        fig.text(0.99, 0.01, 'Dinas Kesehatan Kabupaten Kuningan', 
+                ha='right', va='bottom', fontsize=10, color='gray', alpha=0.7)
+        
+        plt.tight_layout()
+        
+        # Konversi ke bytes
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight', facecolor='white')
+        buf.seek(0)
+        img_bytes = buf.read()
+        plt.close(fig)
+        
+        return img_bytes
+        
+    except Exception as e:
+        st.error(f"⚠️ Error membuat peta statis: {str(e)}")
+        return None
+
+def create_download_button_for_map(img_bytes, filename):
+    """
+    Fungsi untuk membuat tombol download peta
+    
+    Parameters:
+    - img_bytes: Image dalam format bytes
+    - filename: Nama file output (tanpa ekstensi)
+    """
+    if img_bytes:
+        b64 = base64.b64encode(img_bytes).decode()
+        
+        href = f'<a href="data:image/png;base64,{b64}" download="{filename}.png" style="text-decoration: none;">' \
+               f'<button style="' \
+               f'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);' \
+               f'color: white;' \
+               f'border: none;' \
+               f'border-radius: 12px;' \
+               f'padding: 0.8rem 1.5rem;' \
+               f'font-weight: 600;' \
+               f'font-size: 1rem;' \
+               f'font-family: Poppins, sans-serif;' \
+               f'cursor: pointer;' \
+               f'box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);' \
+               f'transition: all 0.3s ease;' \
+               f'" ' \
+               f'onmouseover="this.style.transform=\'translateY(-2px)\'; this.style.boxShadow=\'0 6px 20px rgba(102, 126, 234, 0.4)\';" ' \
+               f'onmouseout="this.style.transform=\'translateY(0)\'; this.style.boxShadow=\'0 4px 12px rgba(102, 126, 234, 0.3)\';">' \
+               f'📥 Download Peta (PNG Resolusi Tinggi)</button></a>'
+        
+        st.markdown(href, unsafe_allow_html=True)
 
 # Custom CSS - DIPERCANTIK
 st.markdown("""
@@ -643,6 +840,7 @@ with st.sidebar:
         **4. Download**
         - Unduh hasil analisis
         - Format CSV siap pakai
+        - Download grafik dalam PNG
         """)
     
     with st.expander("📚 Tentang Indikator"):
@@ -668,7 +866,7 @@ if uploaded_file_gizi is None or uploaded_file_sasaran is None:
     with col2:
         st.metric("✅ Status Sistem", "Siap")
     with col3:
-        st.metric("⚙️ Mode", "ETL + Viz")
+        st.metric("⚙️ Mode", "Proses Data & Visualisasi")
     with col4:
         st.metric("⏳ Status", "Menunggu")
     
@@ -705,7 +903,7 @@ if uploaded_file_gizi is None or uploaded_file_sasaran is None:
             <h4>💾 Export & Download</h4>
             <p>• Download hasil ETL (Star Schema)<br>
             • Format CSV siap analisis<br>
-            • Data agregat per wilayah<br>
+            • Download grafik sebagai PNG<br>
             • Ringkasan statistik lengkap</p>
         </div>
         """, unsafe_allow_html=True)
@@ -773,17 +971,16 @@ else:
         st.markdown("---")
         
         # Tab untuk visualisasi dengan styling baru
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-            "🗺️ Peta Sebaran", 
-            "📊 Perbandingan", 
-            "🎯 Distribusi", 
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "🗺️ Peta Sebaran Stunting", 
+            "📊 Perbandingan Stunting Antar Wilayah ", 
+            "🎯 Sebaran Status Gizi Balita", 
             "📋 Tabel Data", 
             "💾 Download",
-            "📄 Laporan PDF"
         ])
         
         with tab1:
-            st.markdown("### 🗺️ PETA SEBARAN STUNTING KABUPATEN KUNINGAN")
+            st.markdown("### 🗺️ PETA SEBARAN STUNTING PER DESA DI KABUPATEN KUNINGAN")
             
             # Load shapefile
             SHP_FILE_PATH = "data/ADMINISTRASIDESA_AR_25K.shp"
@@ -937,6 +1134,21 @@ else:
                 with col2:
                     st_folium(m, width=1400, height=800, returned_objects=[])
                 
+                st.markdown("---")
+                
+                # Tombol Download Peta
+                st.markdown("#### 💾 Download Peta")
+                with st.spinner("🔄 Membuat peta statis untuk download..."):
+                    map_img_bytes = create_static_map_image(
+                        data_gdf_merged, 
+                        "Peta Sebaran Stunting Per Desa - Kabupaten Kuningan"
+                    )
+                    if map_img_bytes:
+                        create_download_button_for_map(map_img_bytes, "peta_sebaran_stunting_kuningan")
+                        st.info("💡 Peta yang didownload adalah versi statis dengan resolusi tinggi (300 DPI) yang mencakup label nama desa dan persentase stunting.")
+                
+                st.markdown("---")
+                
                 st.markdown("""
                 <div class="info-box">
                     <b>💡 Cara Membaca Peta</b><br><br>
@@ -985,7 +1197,7 @@ else:
                 st.markdown("---")
                 
                 # Row 2: Distribusi Kategori Desa
-                st.markdown("#### 📈 Distribusi Desa Berdasarkan Kategori Prevalensi")
+                st.markdown("#### 📈 Jumlah Desa Berdasarkan Tingkat Stunting")
                 
                 # Kategorisasi desa
                 data_gdf_merged['kategori_desa'] = pd.cut(
@@ -1031,7 +1243,14 @@ else:
                         showlegend=False,
                         paper_bgcolor='rgba(0,0,0,0)'
                     )
-                    st.plotly_chart(fig_pie_kategori, use_container_width=True, config={'displayModeBar': True, 'toImageButtonOptions': {'format': 'png', 'filename': 'distribusi_kategori_desa', 'height': 600, 'width': 1000}})
+                    st.plotly_chart(fig_pie_kategori, use_container_width=True, config={'displayModeBar': False})
+                    
+                    # Tombol download grafik
+                    create_download_button_for_chart(
+                        fig_pie_kategori, 
+                        "distribusi_kategori_desa_stunting",
+                        "Distribusi Kategori Desa Berdasarkan Tingkat Stunting"
+                    )
                 
                 st.markdown("---")
                 
@@ -1039,7 +1258,7 @@ else:
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    st.markdown("#### 🔴 10 Desa dengan Prevalensi Tertinggi")
+                    st.markdown("#### 🔴 10 Desa dengan Stunting Tertinggi")
                     top_desa = data_gdf_merged[data_gdf_merged['persen_stunting'] > 0].nlargest(10, 'persen_stunting')
                     
                     for idx, row in top_desa.iterrows():
@@ -1056,7 +1275,7 @@ else:
                             """, unsafe_allow_html=True)
                 
                 with col2:
-                    st.markdown("#### 🟢 10 Desa dengan Prevalensi Terendah")
+                    st.markdown("#### 🟢 10 Desa dengan Stunting Terendah")
                     bottom_desa = data_gdf_merged[data_gdf_merged['persen_stunting'] > 0].nsmallest(10, 'persen_stunting')
                     
                     for idx, row in bottom_desa.iterrows():
@@ -1083,7 +1302,7 @@ else:
             col_filter1, col_filter2 = st.columns([1, 3])
             with col_filter1:
                 level_perbandingan = st.selectbox(
-                    "📍 Level Perbandingan:",
+                    "📍 Tampilkan Data:",
                     ["Kecamatan", "Desa"],
                     key="level_perbandingan"
                 )
@@ -1174,11 +1393,18 @@ else:
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)'
             )
-            st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': True, 'toImageButtonOptions': {'format': 'png', 'filename': f'top_{level_perbandingan.lower()}_stunting', 'height': 1200, 'width': 1600}})
+            st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
+            
+            # Tombol download grafik
+            create_download_button_for_chart(
+                fig_bar, 
+                f"top_{level_perbandingan.lower()}_stunting_{urutan.lower()}",
+                f"Top {jumlah_tampil} {level_perbandingan} dengan Stunting {urutan}"
+            )
             
             st.markdown("---")
             
-            st.markdown("#### 📊 Perbandingan Tiga Indikator Gizi")
+            st.markdown("#### 📊 Perbandingan Indikator Gizi (Stunting, Kurang Gizi, Wasting)")
             
             df_compare = df_agg.sort_values('persentase_stunting', ascending=False).head(15)
             
@@ -1231,15 +1457,22 @@ else:
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)'
             )
-            st.plotly_chart(fig_compare, use_container_width=True, config={'displayModeBar': True, 'toImageButtonOptions': {'format': 'png', 'filename': 'perbandingan_indikator_gizi', 'height': 800, 'width': 1400}})
+            st.plotly_chart(fig_compare, use_container_width=True, config={'displayModeBar': False})
+            
+            # Tombol download grafik
+            create_download_button_for_chart(
+                fig_compare, 
+                "perbandingan_indikator_gizi_kecamatan",
+                "Perbandingan Indikator Gizi (Stunting, Kurang Gizi, Wasting) Antar Kecamatan"
+            )
         
         with tab3:
-            st.markdown("### 🎯 DISTRIBUSI DAN KATEGORI STATUS GIZI")
+            st.markdown("### 🎯 SEBARAN STATUS GIZI BALITA")
             
             col1, col2 = st.columns(2)
             
             with col1:
-                st.markdown("#### 📊 Distribusi Status Gizi")
+                st.markdown("#### 📊 Komposisi Status Gizi Balita")
                 
                 total_normal = total_ditimbang - total_stunting - total_kurang_gizi - total_wasting
                 
@@ -1273,10 +1506,17 @@ else:
                     margin=dict(t=80, b=20, l=20, r=150),
                     paper_bgcolor='rgba(0,0,0,0)'
                 )
-                st.plotly_chart(fig_pie, use_container_width=True, config={'displayModeBar': True, 'toImageButtonOptions': {'format': 'png', 'filename': 'distribusi_status_gizi', 'height': 800, 'width': 1000}})
+                st.plotly_chart(fig_pie, use_container_width=True, config={'displayModeBar': False})
+                
+                # Tombol download grafik
+                create_download_button_for_chart(
+                    fig_pie, 
+                    "komposisi_status_gizi_balita",
+                    "Komposisi Status Gizi Balita di Kabupaten Kuningan"
+                )
             
             with col2:
-                st.markdown("#### 📈 Kategori Tingkat Keparahan")
+                st.markdown("#### 📈 Pengelompokan Puskesmas Berdasarkan Tingkat Stunting")
                 
                 df_agg['kategori'] = pd.cut(
                     df_agg['persentase_stunting'],
@@ -1313,10 +1553,17 @@ else:
                     margin=dict(t=80, b=20, l=20, r=150),
                     paper_bgcolor='rgba(0,0,0,0)'
                 )
-                st.plotly_chart(fig_kategori, use_container_width=True, config={'displayModeBar': True, 'toImageButtonOptions': {'format': 'png', 'filename': 'kategori_puskesmas', 'height': 800, 'width': 1000}})
+                st.plotly_chart(fig_kategori, use_container_width=True, config={'displayModeBar': False})
+                
+                # Tombol download grafik
+                create_download_button_for_chart(
+                    fig_kategori, 
+                    "kategori_puskesmas_stunting",
+                    "Pengelompokan Puskesmas Berdasarkan Tingkat Stunting"
+                )
             
             st.markdown("---")
-            st.markdown("#### 📍 Daftar Puskesmas per Kategori")
+            st.markdown("#### 📍 Daftar Puskesmas Berdasarkan Kategori Prevalensi Stunting")
             
             for kategori in ['Rendah (<5%)', 'Sedang (5-10%)', 'Tinggi (10-20%)', 'Sangat Tinggi (>20%)']:
                 kec_list = df_agg[df_agg['kategori'] == kategori]['nama_kecamatan'].tolist()
@@ -1557,673 +1804,11 @@ else:
                 🏥 <b>Dimensi Wilayah:</b> Daftar puskesmas dan desa<br>
                 📅 <b>Dimensi Waktu:</b> Informasi waktu pengambilan data<br>
                 📊 <b>Data Agregat:</b> Ringkasan data per puskesmas (sudah diagregasi)<br>
-                📈 <b>Ringkasan Statistik:</b> Statistik umum untuk laporan
+                📈 <b>Ringkasan Statistik:</b> Statistik umum untuk laporan<br>
+                🖼️ <b>Grafik PNG:</b> Tersedia tombol download di setiap grafik
             </div>
             """, unsafe_allow_html=True)
-        
-        with tab6:
-            st.markdown("### 📄 GENERATE LAPORAN PDF LENGKAP")
-            
-            st.markdown("""
-            <div class="info-box">
-                <b>📋 Isi Laporan PDF</b><br><br>
-                Laporan akan berisi:<br>
-                • <b>Cover Page</b> dengan logo dan judul<br>
-                • <b>Peta Sebaran Stunting</b> (visualisasi geografis)<br>
-                • <b>Ringkasan Eksekutif</b> (metrics utama)<br>
-                • <b>Visualisasi Grafik</b> (5 grafik utama)<br>
-                • <b>Top 10 Puskesmas</b> berdasarkan prevalensi stunting<br>
-                • <b>Distribusi Kategori</b> tingkat keparahan<br>
-                • <b>Rekomendasi & Kesimpulan</b><br><br>
-                Format: <b>PDF A4</b>, Full Color, Professional Layout<br>
-                <b>Total: 8 Halaman</b>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            col1, col2, col3 = st.columns([1, 2, 1])
-            
-            with col2:
-                if st.button("🎨 GENERATE LAPORAN PDF", type="primary", use_container_width=True):
-                    with st.spinner("📄 Membuat laporan PDF... Mohon tunggu..."):
-                        try:
-                            # Import libraries yang diperlukan
-                            from reportlab.lib.pagesizes import A4, landscape
-                            from reportlab.lib.units import inch, cm
-                            from reportlab.lib import colors
-                            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-                            from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
-                            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image as RLImage, KeepTogether
-                            from reportlab.pdfgen import canvas
-                            import plotly.io as pio
-                            import tempfile
-                            from datetime import datetime
-                            
-                            # Buat temporary file untuk PDF
-                            pdf_path = tempfile.mktemp(suffix='.pdf')
-                            
-                            # Setup document
-                            doc = SimpleDocTemplate(
-                                pdf_path,
-                                pagesize=A4,
-                                rightMargin=2*cm,
-                                leftMargin=2*cm,
-                                topMargin=2*cm,
-                                bottomMargin=2*cm
-                            )
-                            
-                            # Container untuk semua elemen
-                            story = []
-                            
-                            # Styles
-                            styles = getSampleStyleSheet()
-                            title_style = ParagraphStyle(
-                                'CustomTitle',
-                                parent=styles['Heading1'],
-                                fontSize=24,
-                                textColor=colors.HexColor('#667eea'),
-                                spaceAfter=30,
-                                alignment=TA_CENTER,
-                                fontName='Helvetica-Bold'
-                            )
-                            
-                            heading_style = ParagraphStyle(
-                                'CustomHeading',
-                                parent=styles['Heading2'],
-                                fontSize=16,
-                                textColor=colors.HexColor('#667eea'),
-                                spaceAfter=12,
-                                spaceBefore=12,
-                                fontName='Helvetica-Bold'
-                            )
-                            
-                            subheading_style = ParagraphStyle(
-                                'CustomSubHeading',
-                                parent=styles['Heading3'],
-                                fontSize=12,
-                                textColor=colors.HexColor('#764ba2'),
-                                spaceAfter=8,
-                                fontName='Helvetica-Bold'
-                            )
-                            
-                            body_style = ParagraphStyle(
-                                'CustomBody',
-                                parent=styles['Normal'],
-                                fontSize=10,
-                                alignment=TA_JUSTIFY,
-                                spaceAfter=10
-                            )
-                            
-                            # ============================================================
-                            # HALAMAN 1: COVER PAGE
-                            # ============================================================
-                            story.append(Spacer(1, 2*cm))
-                            
-                            # Logo (jika ada)
-                            try:
-                                logo = RLImage("Logo.png", width=3*cm, height=3*cm)
-                                logo.hAlign = 'CENTER'
-                                story.append(logo)
-                                story.append(Spacer(1, 1*cm))
-                            except:
-                                pass
-                            
-                            # Judul
-                            title = Paragraph("LAPORAN ANALISIS DATA STUNTING", title_style)
-                            story.append(title)
-                            
-                            subtitle = Paragraph("KABUPATEN KUNINGAN", heading_style)
-                            story.append(subtitle)
-                            
-                            story.append(Spacer(1, 1*cm))
-                            
-                            # Info waktu data
-                            waktu_info = f"{df_waktu['tanggal'].iloc[0]} {df_waktu['bulan'].iloc[0]} {df_waktu['tahun'].iloc[0]}, Pukul {df_waktu['jam'].iloc[0]:02d}:{df_waktu['menit'].iloc[0]:02d}"
-                            data_info = Paragraph(f"<b>Data per:</b> {waktu_info}", body_style)
-                            story.append(data_info)
-                            
-                            story.append(Spacer(1, 2*cm))
-                            
-                            # Footer cover
-                            footer_text = Paragraph(
-                                "<b>DINAS KESEHATAN KABUPATEN KUNINGAN</b><br/>Sistem Informasi Analisis Data Stunting",
-                                ParagraphStyle('Footer', parent=body_style, alignment=TA_CENTER)
-                            )
-                            story.append(footer_text)
-                            
-                            story.append(PageBreak())
-                            
-                            # ============================================================
-                            # HALAMAN 2: PETA SEBARAN STUNTING
-                            # ============================================================
-                            story.append(Paragraph("PETA SEBARAN STUNTING KABUPATEN KUNINGAN", heading_style))
-                            story.append(Spacer(1, 0.5*cm))
-                            
-                            # Load dan proses shapefile untuk peta
-                            SHP_FILE_PATH = "data/ADMINISTRASIDESA_AR_25K.shp"
-                            try:
-                                import matplotlib
-                                matplotlib.use('Agg')  # Use non-interactive backend
-                                import matplotlib.pyplot as plt
-                                from matplotlib.patches import Patch
-                                
-                                data_gdf_pdf = load_shapefile(SHP_FILE_PATH)
-                                
-                                if data_gdf_pdf is not None:
-                                    # Join data stunting dengan shapefile
-                                    df_fact_copy = df_fact.copy()
-                                    df_fact_copy['desa_normalized'] = df_fact_copy['desa'].str.strip().str.upper()
-                                    data_gdf_pdf['NAMOBJ_normalized'] = data_gdf_pdf['NAMOBJ'].str.strip().str.upper()
-                                    
-                                    data_gdf_merged_pdf = data_gdf_pdf.merge(
-                                        df_fact_copy[['desa_normalized', 'puskesmas', 'jumlah_ditimbang_d', 
-                                                     'jumlah_stunting', 'persen_stunting']],
-                                        left_on='NAMOBJ_normalized',
-                                        right_on='desa_normalized',
-                                        how='left'
-                                    )
-                                    
-                                    # Isi nilai NaN
-                                    data_gdf_merged_pdf['persen_stunting'] = data_gdf_merged_pdf['persen_stunting'].fillna(0)
-                                    
-                                    # Fungsi untuk menentukan warna
-                                    def get_color_map(persen):
-                                        if persen == 0:
-                                            return '#e0e0e0'
-                                        elif persen < 5:
-                                            return '#d4edda'
-                                        elif persen < 10:
-                                            return '#fff3cd'
-                                        elif persen < 15:
-                                            return '#ffcc80'
-                                        elif persen < 20:
-                                            return '#ff8c42'
-                                        else:
-                                            return '#d9534f'
-                                    
-                                    data_gdf_merged_pdf['color'] = data_gdf_merged_pdf['persen_stunting'].apply(get_color_map)
-                                    
-                                    # Buat peta dengan matplotlib
-                                    fig_map, ax_map = plt.subplots(1, 1, figsize=(14, 10))
-                                    
-                                    # Plot peta
-                                    data_gdf_merged_pdf.plot(
-                                        ax=ax_map,
-                                        color=data_gdf_merged_pdf['color'],
-                                        edgecolor='black',
-                                        linewidth=0.5
-                                    )
-                                    
-                                    # Remove axis
-                                    ax_map.axis('off')
-                                    ax_map.set_title('Peta Sebaran Prevalensi Stunting per Desa', 
-                                                    fontsize=14, fontweight='bold', pad=20)
-                                    
-                                    # Tambahkan legend
-                                    legend_elements = [
-                                        Patch(facecolor='#e0e0e0', edgecolor='black', label='Tidak ada data'),
-                                        Patch(facecolor='#d4edda', edgecolor='black', label='< 5% (Sangat Rendah)'),
-                                        Patch(facecolor='#fff3cd', edgecolor='black', label='5-10% (Rendah)'),
-                                        Patch(facecolor='#ffcc80', edgecolor='black', label='10-15% (Sedang)'),
-                                        Patch(facecolor='#ff8c42', edgecolor='black', label='15-20% (Tinggi)'),
-                                        Patch(facecolor='#d9534f', edgecolor='black', label='> 20% (Sangat Tinggi)')
-                                    ]
-                                    
-                                    ax_map.legend(handles=legend_elements, 
-                                                loc='lower left',
-                                                fontsize=9,
-                                                title='Prevalensi Stunting',
-                                                title_fontsize=10,
-                                                frameon=True,
-                                                fancybox=True,
-                                                shadow=True)
-                                    
-                                    # Save peta
-                                    img_map_path = tempfile.mktemp(suffix='.png')
-                                    plt.tight_layout()
-                                    plt.savefig(img_map_path, dpi=150, bbox_inches='tight', facecolor='white')
-                                    plt.close()
-                                    
-                                    # Tambahkan ke PDF
-                                    img_map_rl = RLImage(img_map_path, width=17*cm, height=12*cm)
-                                    story.append(img_map_rl)
-                                    story.append(Spacer(1, 0.5*cm))
-                                    
-                                    # Tambahkan keterangan peta
-                                    story.append(Paragraph("KETERANGAN PETA", subheading_style))
-                                    
-                                    keterangan_peta = [
-                                        "Peta di atas menunjukkan sebaran prevalensi stunting di setiap desa di Kabupaten Kuningan.",
-                                        "Warna yang lebih gelap (merah) menunjukkan prevalensi stunting yang lebih tinggi, sedangkan warna yang lebih terang (hijau/kuning) menunjukkan prevalensi yang lebih rendah.",
-                                        "Area berwarna abu-abu menunjukkan desa yang tidak memiliki data atau belum dilakukan pengukuran."
-                                    ]
-                                    
-                                    for ket in keterangan_peta:
-                                        story.append(Paragraph(ket, body_style))
-                                    
-                                else:
-                                    # Jika shapefile tidak ada, tambahkan note
-                                    note_text = Paragraph(
-                                        "<i>Catatan: Peta sebaran tidak dapat ditampilkan karena file shapefile tidak tersedia. "
-                                        "Silakan pastikan file shapefile tersedia di folder 'data/ADMINISTRASIDESA_AR_25K.shp'</i>",
-                                        body_style
-                                    )
-                                    story.append(note_text)
-                                    
-                            except Exception as e:
-                                # Jika ada error, tambahkan note
-                                note_text = Paragraph(
-                                    f"<i>Catatan: Peta sebaran tidak dapat ditampilkan. Error: {str(e)}</i>",
-                                    body_style
-                                )
-                                story.append(note_text)
-                            
-                            story.append(PageBreak())
-                            
-                            # ============================================================
-                            # HALAMAN 3: RINGKASAN EKSEKUTIF
-                            # ============================================================
-                            story.append(Paragraph("RINGKASAN EKSEKUTIF", heading_style))
-                            story.append(Spacer(1, 0.5*cm))
-                            
-                            # Metrics dalam tabel
-                            metrics_data = [
-                                ['Indikator', 'Nilai'],
-                                ['Total Balita Ditimbang', f"{total_ditimbang:,}"],
-                                ['Total Balita Stunting', f"{total_stunting:,}"],
-                                ['Persentase Stunting Rata-rata', f"{avg_stunting:.2f}%"],
-                                ['Total Balita Kurang Gizi', f"{total_kurang_gizi:,}"],
-                                ['Total Balita Wasting', f"{total_wasting:,}"],
-                                ['Jumlah Puskesmas', f"{len(df_agg)}"]
-                            ]
-                            
-                            metrics_table = Table(metrics_data, colWidths=[10*cm, 5*cm])
-                            metrics_table.setStyle(TableStyle([
-                                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
-                                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                                ('FONTSIZE', (0, 0), (-1, 0), 11),
-                                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                                ('FONTSIZE', (0, 1), (-1, -1), 10),
-                                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey])
-                            ]))
-                            story.append(metrics_table)
-                            story.append(Spacer(1, 1*cm))
-                            
-                            # Insight utama
-                            story.append(Paragraph("INSIGHT UTAMA", subheading_style))
-                            
-                            max_stunting_kec = df_agg.loc[df_agg['persentase_stunting'].idxmax()]
-                            min_stunting_kec = df_agg.loc[df_agg['persentase_stunting'].idxmin()]
-                            
-                            insights = [
-                                f"• Puskesmas dengan prevalensi stunting tertinggi adalah <b>{max_stunting_kec['nama_kecamatan']}</b> dengan angka <b>{max_stunting_kec['persentase_stunting']:.2f}%</b>.",
-                                f"• Puskesmas dengan prevalensi stunting terendah adalah <b>{min_stunting_kec['nama_kecamatan']}</b> dengan angka <b>{min_stunting_kec['persentase_stunting']:.2f}%</b>.",
-                                f"• Rata-rata prevalensi stunting di Kabupaten Kuningan adalah <b>{avg_stunting:.2f}%</b>.",
-                                f"• Dari {len(df_agg)} puskesmas, terdapat <b>{len(df_agg[df_agg['persentase_stunting'] > 20])}</b> puskesmas dengan kategori <b>Sangat Tinggi</b> (>20%).",
-                                f"• Total balita yang ditimbang adalah <b>{total_ditimbang:,}</b> balita, dengan <b>{total_stunting:,}</b> balita mengalami stunting."
-                            ]
-                            
-                            for insight in insights:
-                                story.append(Paragraph(insight, body_style))
-                            
-                            story.append(PageBreak())
-                            
-                            # ============================================================
-                            # HALAMAN 4: GRAFIK TOP 10 PUSKESMAS
-                            # ============================================================
-                            story.append(Paragraph("TOP 10 PUSKESMAS BERDASARKAN PREVALENSI STUNTING", heading_style))
-                            story.append(Spacer(1, 0.5*cm))
-                            
-                            # Buat grafik
-                            df_top10 = df_agg.nlargest(10, 'persentase_stunting')
-                            
-                            fig_top10 = go.Figure()
-                            fig_top10.add_trace(go.Bar(
-                                y=df_top10['nama_kecamatan'],
-                                x=df_top10['persentase_stunting'],
-                                orientation='h',
-                                text=[f"{persen:.1f}%" for persen in df_top10['persentase_stunting']],
-                                textposition='outside',
-                                marker=dict(
-                                    color=df_top10['persentase_stunting'],
-                                    colorscale=[[0, '#fff3cd'], [0.5, '#ff8c42'], [1, '#d9534f']],
-                                    showscale=False
-                                )
-                            ))
-                            
-                            fig_top10.update_layout(
-                                height=500,
-                                xaxis_title='Persentase Stunting (%)',
-                                yaxis_title='',
-                                yaxis={'categoryorder':'total ascending'},
-                                font=dict(size=10),
-                                margin=dict(l=150, r=50, t=20, b=50),
-                                plot_bgcolor='white',
-                                paper_bgcolor='white'
-                            )
-                            
-                            # Save grafik sebagai gambar
-                            img_top10 = tempfile.mktemp(suffix='.png')
-                            pio.write_image(fig_top10, img_top10, width=1200, height=600)
-                            
-                            img_top10_rl = RLImage(img_top10, width=16*cm, height=8*cm)
-                            story.append(img_top10_rl)
-                            
-                            story.append(Spacer(1, 0.5*cm))
-                            
-                            # Tabel data top 10
-                            top10_data = [['No', 'Puskesmas', 'Jumlah Stunting', 'Ditimbang', '% Stunting']]
-                            for idx, (_, row) in enumerate(df_top10.iterrows(), 1):
-                                top10_data.append([
-                                    str(idx),
-                                    row['nama_kecamatan'],
-                                    f"{int(row['jumlah_balita_stunting']):,}",
-                                    f"{int(row['jumlah_balita_ditimbang']):,}",
-                                    f"{row['persentase_stunting']:.2f}%"
-                                ])
-                            
-                            top10_table = Table(top10_data, colWidths=[1*cm, 7*cm, 3*cm, 3*cm, 3*cm])
-                            top10_table.setStyle(TableStyle([
-                                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#d9534f')),
-                                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                                ('FONTSIZE', (0, 0), (-1, 0), 9),
-                                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-                                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                                ('FONTSIZE', (0, 1), (-1, -1), 8),
-                                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey])
-                            ]))
-                            story.append(top10_table)
-                            
-                            story.append(PageBreak())
-                            
-                            # ============================================================
-                            # HALAMAN 5: DISTRIBUSI KATEGORI
-                            # ============================================================
-                            story.append(Paragraph("DISTRIBUSI KATEGORI TINGKAT KEPARAHAN", heading_style))
-                            story.append(Spacer(1, 0.5*cm))
-                            
-                            # Tambahkan kategori jika belum ada
-                            if 'kategori' not in df_agg.columns:
-                                df_agg['kategori'] = pd.cut(
-                                    df_agg['persentase_stunting'],
-                                    bins=[0, 5, 10, 20, 100],
-                                    labels=['Rendah (<5%)', 'Sedang (5-10%)', 'Tinggi (10-20%)', 'Sangat Tinggi (>20%)']
-                                )
-                            
-                            kategori_count = df_agg['kategori'].value_counts().sort_index()
-                            
-                            # Pie chart
-                            fig_kategori_pdf = go.Figure(data=[go.Pie(
-                                labels=kategori_count.index,
-                                values=kategori_count.values,
-                                hole=0.4,
-                                marker_colors=['#5cb85c', '#f0ad4e', '#ff8c42', '#d9534f'],
-                                textinfo='label+percent',
-                                textfont=dict(size=11)
-                            )])
-                            
-                            fig_kategori_pdf.update_layout(
-                                height=400,
-                                title_text="Distribusi Puskesmas Berdasarkan Kategori",
-                                title_font=dict(size=14),
-                                font=dict(size=10),
-                                showlegend=True,
-                                paper_bgcolor='white'
-                            )
-                            
-                            img_kategori = tempfile.mktemp(suffix='.png')
-                            pio.write_image(fig_kategori_pdf, img_kategori, width=800, height=500)
-                            
-                            img_kategori_rl = RLImage(img_kategori, width=14*cm, height=8.5*cm)
-                            story.append(img_kategori_rl)
-                            
-                            story.append(Spacer(1, 0.5*cm))
-                            
-                            # Tabel distribusi kategori
-                            kategori_data = [['Kategori', 'Jumlah Puskesmas', 'Persentase']]
-                            for kategori, jumlah in kategori_count.items():
-                                persen = (jumlah / len(df_agg) * 100)
-                                kategori_data.append([
-                                    str(kategori),
-                                    str(jumlah),
-                                    f"{persen:.1f}%"
-                                ])
-                            
-                            kategori_table = Table(kategori_data, colWidths=[8*cm, 4*cm, 4*cm])
-                            kategori_table.setStyle(TableStyle([
-                                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
-                                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                                ('FONTSIZE', (0, 0), (-1, 0), 10),
-                                ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-                                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-                                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                                ('FONTSIZE', (0, 1), (-1, -1), 9),
-                                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey])
-                            ]))
-                            story.append(kategori_table)
-                            
-                            story.append(PageBreak())
-                            
-                            # ============================================================
-                            # HALAMAN 6: PERBANDINGAN 3 INDIKATOR
-                            # ============================================================
-                            story.append(Paragraph("PERBANDINGAN INDIKATOR GIZI (TOP 10 PUSKESMAS)", heading_style))
-                            story.append(Spacer(1, 0.5*cm))
-                            
-                            df_compare_pdf = df_agg.sort_values('persentase_stunting', ascending=False).head(10)
-                            
-                            fig_compare_pdf = go.Figure()
-                            
-                            fig_compare_pdf.add_trace(go.Bar(
-                                name='Stunting',
-                                x=df_compare_pdf['nama_kecamatan'],
-                                y=df_compare_pdf['persentase_stunting'],
-                                marker_color='#d9534f'
-                            ))
-                            fig_compare_pdf.add_trace(go.Bar(
-                                name='Kurang Gizi',
-                                x=df_compare_pdf['nama_kecamatan'],
-                                y=df_compare_pdf['persentase_kurang_gizi'],
-                                marker_color='#f0ad4e'
-                            ))
-                            fig_compare_pdf.add_trace(go.Bar(
-                                name='Wasting',
-                                x=df_compare_pdf['nama_kecamatan'],
-                                y=df_compare_pdf['persentase_wasting'],
-                                marker_color='#9b59b6'
-                            ))
-                            
-                            fig_compare_pdf.update_layout(
-                                barmode='group',
-                                height=450,
-                                xaxis_tickangle=-45,
-                                yaxis_title='Persentase (%)',
-                                xaxis_title='Puskesmas',
-                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                                font=dict(size=9),
-                                margin=dict(t=60, b=100, l=60, r=40),
-                                plot_bgcolor='white',
-                                paper_bgcolor='white'
-                            )
-                            
-                            img_compare = tempfile.mktemp(suffix='.png')
-                            pio.write_image(fig_compare_pdf, img_compare, width=1200, height=600)
-                            
-                            img_compare_rl = RLImage(img_compare, width=16*cm, height=8*cm)
-                            story.append(img_compare_rl)
-                            
-                            story.append(Spacer(1, 0.5*cm))
-                            
-                            # Penjelasan indikator
-                            story.append(Paragraph("PENJELASAN INDIKATOR GIZI", subheading_style))
-                            
-                            indikator_text = [
-                                "<b>Stunting (TB/U):</b> Kondisi gagal tumbuh pada anak akibat kekurangan gizi kronis. Diukur berdasarkan tinggi badan anak dibandingkan dengan usianya.",
-                                "<b>Kurang Gizi (BB/U):</b> Kondisi berat badan anak yang kurang dari standar untuk usianya, menunjukkan kekurangan gizi secara umum.",
-                                "<b>Wasting (BB/TB):</b> Kondisi kekurangan gizi akut, diukur dari berat badan yang rendah dibandingkan tinggi badannya."
-                            ]
-                            
-                            for text in indikator_text:
-                                story.append(Paragraph(text, body_style))
-                            
-                            story.append(PageBreak())
-                            
-                            # ============================================================
-                            # HALAMAN 7: DISTRIBUSI STATUS GIZI
-                            # ============================================================
-                            story.append(Paragraph("DISTRIBUSI STATUS GIZI BALITA", heading_style))
-                            story.append(Spacer(1, 0.5*cm))
-                            
-                            total_normal = total_ditimbang - total_stunting - total_kurang_gizi - total_wasting
-                            
-                            labels_dist = ['Stunting', 'Kurang Gizi', 'Wasting', 'Normal/Lainnya']
-                            values_dist = [total_stunting, total_kurang_gizi, total_wasting, total_normal]
-                            colors_dist = ['#d9534f', '#f0ad4e', '#ff8c42', '#5bc0de']
-                            
-                            fig_dist = go.Figure(data=[go.Pie(
-                                labels=labels_dist,
-                                values=values_dist,
-                                hole=0.5,
-                                marker_colors=colors_dist,
-                                textinfo='label+percent',
-                                textfont=dict(size=11)
-                            )])
-                            
-                            fig_dist.update_layout(
-                                height=400,
-                                title_text="Proporsi Masalah Gizi di Kabupaten Kuningan",
-                                title_font=dict(size=14),
-                                font=dict(size=10),
-                                showlegend=True,
-                                paper_bgcolor='white'
-                            )
-                            
-                            img_dist = tempfile.mktemp(suffix='.png')
-                            pio.write_image(fig_dist, img_dist, width=800, height=500)
-                            
-                            img_dist_rl = RLImage(img_dist, width=14*cm, height=8.5*cm)
-                            story.append(img_dist_rl)
-                            
-                            story.append(Spacer(1, 0.5*cm))
-                            
-                            # Tabel detail distribusi
-                            dist_data = [['Status Gizi', 'Jumlah Balita', 'Persentase']]
-                            for label, value in zip(labels_dist, values_dist):
-                                persen = (value / total_ditimbang * 100) if total_ditimbang > 0 else 0
-                                dist_data.append([
-                                    label,
-                                    f"{int(value):,}",
-                                    f"{persen:.2f}%"
-                                ])
-                            
-                            dist_table = Table(dist_data, colWidths=[8*cm, 4*cm, 4*cm])
-                            dist_table.setStyle(TableStyle([
-                                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
-                                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                                ('FONTSIZE', (0, 0), (-1, 0), 10),
-                                ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-                                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-                                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                                ('FONTSIZE', (0, 1), (-1, -1), 9),
-                                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey])
-                            ]))
-                            story.append(dist_table)
-                            
-                            story.append(PageBreak())
-                            
-                            # ============================================================
-                            # HALAMAN 8: REKOMENDASI & KESIMPULAN
-                            # ============================================================
-                            story.append(Paragraph("REKOMENDASI DAN KESIMPULAN", heading_style))
-                            story.append(Spacer(1, 0.5*cm))
-                            
-                            story.append(Paragraph("REKOMENDASI", subheading_style))
-                            
-                            rekomendasi = [
-                                f"<b>1. Prioritas Intervensi:</b> Fokuskan program intervensi pada {len(df_agg[df_agg['persentase_stunting'] > 20])} puskesmas dengan kategori Sangat Tinggi (>20%). Puskesmas-puskesmas ini memerlukan perhatian khusus dan alokasi sumber daya yang lebih besar.",
-                                f"<b>2. Program Pencegahan:</b> Tingkatkan program edukasi gizi ibu hamil dan balita, terutama di wilayah dengan prevalensi tinggi. Fokus pada 1000 Hari Pertama Kehidupan (HPK).",
-                                f"<b>3. Monitoring Berkala:</b> Lakukan pemantauan rutin setiap bulan untuk mengevaluasi efektivitas program yang telah dilaksanakan, khususnya di {df_top10.iloc[0]['nama_kecamatan']} yang memiliki prevalensi tertinggi.",
-                                f"<b>4. Kolaborasi Lintas Sektor:</b> Perkuat kerja sama dengan Dinas Pertanian, PKK, dan organisasi masyarakat untuk program ketahanan pangan keluarga.",
-                                f"<b>5. Pemberdayaan Kader:</b> Tingkatkan kapasitas kader posyandu dalam deteksi dini dan edukasi gizi masyarakat di tingkat desa."
-                            ]
-                            
-                            for rekom in rekomendasi:
-                                story.append(Paragraph(rekom, body_style))
-                                story.append(Spacer(1, 0.3*cm))
-                            
-                            story.append(Spacer(1, 0.5*cm))
-                            story.append(Paragraph("KESIMPULAN", subheading_style))
-                            
-                            kesimpulan = [
-                                f"Berdasarkan analisis data stunting Kabupaten Kuningan, terdapat <b>{total_stunting:,}</b> balita yang mengalami stunting dari <b>{total_ditimbang:,}</b> balita yang ditimbang, dengan rata-rata prevalensi <b>{avg_stunting:.2f}%</b>.",
-                                f"Disparitas antar wilayah cukup signifikan, dengan prevalensi tertinggi di <b>{max_stunting_kec['nama_kecamatan']}</b> ({max_stunting_kec['persentase_stunting']:.2f}%) dan terendah di <b>{min_stunting_kec['nama_kecamatan']}</b> ({min_stunting_kec['persentase_stunting']:.2f}%).",
-                                f"Masalah gizi lainnya seperti kurang gizi (<b>{total_kurang_gizi:,}</b> balita) dan wasting (<b>{total_wasting:,}</b> balita) juga memerlukan perhatian serius dalam upaya perbaikan gizi masyarakat.",
-                                "Diperlukan komitmen dan kolaborasi semua pihak untuk mencapai target penurunan stunting sesuai dengan program nasional dan daerah."
-                            ]
-                            
-                            for kesp in kesimpulan:
-                                story.append(Paragraph(kesp, body_style))
-                            
-                            story.append(Spacer(1, 1.5*cm))
-                            
-                            # Footer
-                            footer_closing = Paragraph(
-                                f"<b>Laporan ini digenerate secara otomatis pada {datetime.now().strftime('%d %B %Y, pukul %H:%M WIB')}</b><br/><br/>"
-                                "Dinas Kesehatan Kabupaten Kuningan<br/>"
-                                "Sistem Informasi Analisis Data Stunting",
-                                ParagraphStyle('Closing', parent=body_style, alignment=TA_CENTER, fontSize=9)
-                            )
-                            story.append(footer_closing)
-                            
-                            # Build PDF
-                            doc.build(story)
-                            
-                            # Read PDF file
-                            with open(pdf_path, 'rb') as f:
-                                pdf_bytes = f.read()
-                            
-                            st.success("✅ Laporan PDF berhasil dibuat!")
-                            
-                            # Download button
-                            st.download_button(
-                                label="📥 DOWNLOAD LAPORAN PDF",
-                                data=pdf_bytes,
-                                file_name=f"Laporan_Stunting_Kuningan_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                                mime="application/pdf",
-                                use_container_width=True
-                            )
-                            
-                            # Preview info
-                            st.info(f"📊 Laporan berisi {len(story)} elemen dengan total 8 halaman (termasuk peta sebaran)")
-                            
-                        except Exception as e:
-                            st.error(f"❌ Error saat membuat PDF: {str(e)}")
-                            st.error("Pastikan library berikut terinstall: reportlab, kaleido")
-            
-            st.markdown("---")
-            
-            st.markdown("""
-            <div class="info-box">
-                <b>⚙️ Persyaratan Teknis</b><br><br>
-                Untuk generate PDF, sistem memerlukan:<br>
-                • <b>reportlab</b> - Library pembuatan PDF<br>
-                • <b>kaleido</b> - Converter grafik Plotly ke gambar<br>
-                • <b>Logo.png</b> - File logo (opsional)<br><br>
-                Jika terjadi error, pastikan library sudah terinstall dengan:<br>
-                <code>pip install reportlab kaleido</code>
-            </div>
-            """, unsafe_allow_html=True)
-        
+
         # Footer dengan styling baru
         st.markdown("---")
         waktu_info = f"{df_waktu['tanggal'].iloc[0]} {df_waktu['bulan'].iloc[0]} {df_waktu['tahun'].iloc[0]}, Pukul {df_waktu['jam'].iloc[0]:02d}:{df_waktu['menit'].iloc[0]:02d}"
