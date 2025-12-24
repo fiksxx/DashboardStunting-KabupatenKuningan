@@ -1002,7 +1002,11 @@ else:
         ])
         
         with tab1:
-            st.markdown("### 🗺️ PETA SEBARAN STUNTING PER DESA DI KABUPATEN KUNINGAN")
+            waktu_info = f"{df_waktu['tanggal'].iloc[0]} {df_waktu['bulan'].iloc[0]} {df_waktu['tahun'].iloc[0]}"
+            st.markdown(
+                f"### 🗺️ PETA SEBARAN STUNTING PER DESA DI KABUPATEN KUNINGAN "
+                f"{waktu_info}"
+            )
             
             # Load shapefile
             SHP_FILE_PATH = "data/ADMINISTRASIDESA_AR_25K.shp"
@@ -1318,7 +1322,8 @@ else:
                 st.info("📁 Pastikan file shapefile tersedia di folder 'data/ADMINISTRASIDESA_AR_25K.shp'")
         
         with tab2:
-            st.markdown("### 📊 PERBANDINGAN ANTAR WILAYAH")
+            waktu_info = f"{df_waktu['tanggal'].iloc[0]} {df_waktu['bulan'].iloc[0]} {df_waktu['tahun'].iloc[0]}"
+            st.markdown("### 📊 PERBANDINGAN ANTAR WILAYAH " f"{waktu_info}")
             
             # Filter untuk memilih level perbandingan
             col_filter1, col_filter2 = st.columns([1, 3])
@@ -1372,7 +1377,7 @@ else:
             with col2:
                 urutan = st.radio("📈 Urutan:", ["Tertinggi", "Terendah"], key="urutan_radio")
             
-            st.markdown(f"#### 📊 Top {level_perbandingan} - Stunting {urutan}")
+            st.markdown(f"#### 📊 Top {level_perbandingan} - Stunting {urutan} " f"{waktu_info}")
             
             # Sorting berdasarkan urutan
             if urutan == "Tertinggi":
@@ -1426,7 +1431,7 @@ else:
             
             st.markdown("---")
             
-            st.markdown("#### 📊 Perbandingan Indikator Gizi (Stunting, Kurang Gizi, Wasting)")
+            st.markdown("#### 📊 Perbandingan Indikator Gizi (Stunting, Kurang Gizi, Wasting) " f"{waktu_info}")
             
             df_compare = df_agg.sort_values('persentase_stunting', ascending=False).head(15)
             
@@ -1489,16 +1494,17 @@ else:
             )
         
         with tab3:
-            st.markdown("### 🎯 SEBARAN STATUS GIZI BALITA")
+            waktu_info = f"{df_waktu['tanggal'].iloc[0]} {df_waktu['bulan'].iloc[0]} {df_waktu['tahun'].iloc[0]}"
+            st.markdown("### 🎯 SEBARAN STATUS GIZI BALITA " f"{waktu_info}")
             
             col1, col2 = st.columns(2)
             
             with col1:
-                st.markdown("#### 📊 Komposisi Status Gizi Balita")
+                st.markdown("#### 📊 Komposisi Status Gizi Balita " f"{waktu_info}")
                 
                 total_normal = total_ditimbang - total_stunting - total_kurang_gizi - total_wasting
                 
-                labels = ['Stunting', 'Kurang Gizi', 'Wasting', 'Normal/Lainnya']
+                labels = ['Stunting', 'Underweight', 'Wasting', 'Normal']
                 values = [total_stunting, total_kurang_gizi, total_wasting, total_normal]
                 colors = ['#d9534f', '#f0ad4e', '#ff8c42', '#5bc0de']
                 
@@ -1538,7 +1544,7 @@ else:
                 )
             
             with col2:
-                st.markdown("#### 📈 Pengelompokan Puskesmas Berdasarkan Tingkat Stunting")
+                st.markdown("#### 📈 Puskesmas Berdasarkan Tingkat Stunting " f"{waktu_info}")
                 
                 df_agg['kategori'] = pd.cut(
                     df_agg['persentase_stunting'],
@@ -1608,7 +1614,8 @@ else:
             """, unsafe_allow_html=True)
         
         with tab4:
-            st.markdown("### 📋 DATA DETAIL PER WILAYAH")
+            waktu_info = f"{df_waktu['tanggal'].iloc[0]} {df_waktu['bulan'].iloc[0]} {df_waktu['tahun'].iloc[0]}"
+            st.markdown("### 📋 DATA DETAIL PER WILAYAH " f"{waktu_info}")
             
             # Filter untuk memilih level data
             col_level, col_filter_kec = st.columns([1, 2])
