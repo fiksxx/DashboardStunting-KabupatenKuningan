@@ -984,7 +984,7 @@ else:
         with col2:
             st.metric("📉 Total Stunting", f"{total_stunting:,}", f"{avg_stunting:.1f}%")
         with col3:
-            st.metric("🍽️ Kurang Gizi", f"{total_kurang_gizi:,}")
+            st.metric("🍽️ Underweight", f"{total_kurang_gizi:,}")
         with col4:
             st.metric("⚠️ Wasting", f"{total_wasting:,}")
         with col5:
