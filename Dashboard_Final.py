@@ -843,6 +843,25 @@ with st.sidebar:
     if uploaded_file_gizi and uploaded_file_sasaran:
         st.success("✅ File berhasil diupload!")
     
+        # TAMBAHKAN CODE INI
+        st.markdown("---")
+        st.markdown("### 📅 INFORMASI DATA")
+        
+        # Pilih bulan data
+        bulan_options = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI',
+                        'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER']
+        pilih_bulan = st.selectbox("📊 Bulan Data Stunting:", bulan_options, key='bulan_data')
+        
+        # Input tanggal penarikan
+        tanggal_penarikan = st.date_input(
+            "📅 Tanggal Penarikan Data:",
+            value=pd.to_datetime('today'),
+            key='tanggal_penarikan'
+        )
+        
+        # Format tanggal untuk ditampilkan
+        tanggal_penarikan_str = tanggal_penarikan.strftime("%d %B %Y")
+
     st.markdown("---")
     st.markdown("### 📖 PANDUAN")
     with st.expander("💡 Cara Menggunakan"):
@@ -942,9 +961,20 @@ else:
         tmp_sasaran.write(uploaded_file_sasaran.getvalue())
         tmp_sasaran_path = tmp_sasaran.name
     
+    # Simpan info bulan dan tanggal ke session state
+    if 'pilih_bulan' not in st.session_state:
+        st.session_state.pilih_bulan = 'JANUARI'
+    if 'tanggal_penarikan_str' not in st.session_state:
+        st.session_state.tanggal_penarikan_str = pd.to_datetime('today').strftime("%d %B %Y")
+
+    # Update dari input user jika ada
+    if 'bulan_data' in locals():
+        st.session_state.pilih_bulan = pilih_bulan
+        st.session_state.tanggal_penarikan_str = tanggal_penarikan_str
+
     with st.spinner("🔄 Memproses data... Mohon tunggu..."):
         df_fact, df_wilayah, df_waktu, success, message = proses_etl(tmp_gizi_path, tmp_sasaran_path)
-    
+
     # Hapus file temporary
     os.unlink(tmp_gizi_path)
     os.unlink(tmp_sasaran_path)
@@ -969,26 +999,79 @@ else:
         df_agg['persentase_wasting'] = (df_agg['jumlah_balita_wasting'] / df_agg['jumlah_balita_ditimbang'] * 100).fillna(0)
         df_agg['persentase_sasaran'] = (df_agg['jumlah_balita_ditimbang'] / df_agg['sasaran_total'] * 100).fillna(0)
         
-        # Ringkasan statistik dengan styling baru
-        st.markdown("### 📈 RINGKASAN DATA")
-        col1, col2, col3, col4, col5 = st.columns(5)
+        # Ringkasan statistik dengan styling baru yang lebih informatif
+        st.markdown("### 📈 RINGKASAN DATA STATISTIK STUNTING PER KABUPATEN KUNINGAN")
         
         total_ditimbang = int(df_agg['jumlah_balita_ditimbang'].sum())
+        total_sasaran = int(df_agg['sasaran_total'].sum())
         total_stunting = int(df_agg['jumlah_balita_stunting'].sum())
         total_kurang_gizi = int(df_agg['jumlah_balita_kurang_gizi'].sum())
         total_wasting = int(df_agg['jumlah_balita_wasting'].sum())
         avg_stunting = df_agg['persentase_stunting'].mean()
+
+        persen_ditimbang = (total_ditimbang / total_sasaran * 100) if total_sasaran > 0 else 0
+        persen_stunting = (total_stunting / total_ditimbang * 100) if total_ditimbang > 0 else 0
+        persen_kurang_gizi = (total_kurang_gizi / total_ditimbang * 100) if total_ditimbang > 0 else 0
+        persen_wasting = (total_wasting / total_ditimbang * 100) if total_ditimbang > 0 else 0
+        
+        # Row dengan 4 kolom untuk card yang lebih besar
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("⚖️ Balita Ditimbang", f"{total_ditimbang:,}")
+            st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+                        color: white; text-align: center;'>
+                <div style='font-size: 14px; opacity: 0.9; margin-bottom: 8px;'>⚖️ BALITA DITIMBANG (D)</div>
+                <div style='font-size: 32px; font-weight: 700; margin-bottom: 5px;'>{total_ditimbang:,}</div>
+                <div style='font-size: 24px; font-weight: 600; color: #ffd700;'>{persen_ditimbang:.1f}% dari sasaran</div>
+                <div style='font-size: 18px; opacity: 0.8; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 8px;'>
+                    🎯 Sasaran: {total_sasaran:,} balita
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
         with col2:
-            st.metric("📉 Total Stunting", f"{total_stunting:,}", f"{avg_stunting:.1f}%")
+            st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+                        color: white; text-align: center;'>
+                <div style='font-size: 14px; opacity: 0.9; margin-bottom: 8px;'>📉 TOTAL STUNTING (S)</div>
+                <div style='font-size: 32px; font-weight: 700; margin-bottom: 5px;'>{total_stunting:,}</div>
+                <div style='font-size: 24px; font-weight: 600; color: #ffd700;'>{persen_stunting:.2f}% (S/D)</div>
+                <div style='font-size: 18px; opacity: 0.8; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 8px;'>
+                    dari {total_ditimbang:,} balita ditimbang
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
         with col3:
-            st.metric("🍽️ Underweight", f"{total_kurang_gizi:,}")
+            st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+                        color: white; text-align: center;'>
+                <div style='font-size: 14px; opacity: 0.9; margin-bottom: 8px;'>🍽️ UNDERWEIGHT (U)</div>
+                <div style='font-size: 32px; font-weight: 700; margin-bottom: 5px;'>{total_kurang_gizi:,}</div>
+                <div style='font-size: 24px; font-weight: 600; color: #ffd700;'>{persen_kurang_gizi:.2f}% (U/D)</div>
+                <div style='font-size: 18px; opacity: 0.8; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 8px;'>
+                    dari {total_ditimbang:,} balita ditimbang
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
         with col4:
-            st.metric("⚠️ Wasting", f"{total_wasting:,}")
-        with col5:
-            st.metric("🏥 Puskesmas", f"{len(df_agg)}")
+            st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+                        color: white; text-align: center;'>
+                <div style='font-size: 14px; opacity: 0.9; margin-bottom: 8px;'>⚠️ WASTING (W) </div>
+                <div style='font-size: 32px; font-weight: 700; margin-bottom: 5px;'>{total_wasting:,}</div>
+                <div style='font-size: 24px; font-weight: 600; color: #ffd700;'>{persen_wasting:.2f}% (W/D)</div>
+                <div style='font-size: 18px; opacity: 0.8; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 8px;'>
+                    dari {total_ditimbang:,} balita ditimbang
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         
         st.markdown("---")
         
@@ -1002,10 +1085,10 @@ else:
         ])
         
         with tab1:
-            waktu_info = f"{df_waktu['tanggal'].iloc[0]} {df_waktu['bulan'].iloc[0]} {df_waktu['tahun'].iloc[0]}"
+            waktu_info = f"Bulan {st.session_state.pilih_bulan} (Penarikan: {st.session_state.tanggal_penarikan_str})"            
             st.markdown(
                 f"### 🗺️ PETA SEBARAN STUNTING PER DESA DI KABUPATEN KUNINGAN "
-                f"{waktu_info}"
+                f"{pilih_bulan}"
             )
             
             # Load shapefile
@@ -1033,132 +1116,284 @@ else:
                 data_gdf_merged['persen_stunting'] = data_gdf_merged['persen_stunting'].fillna(0)
                 data_gdf_merged['puskesmas'] = data_gdf_merged['puskesmas'].fillna('N/A')
                 
+                # ==================== FITUR PENCARIAN DESA ====================
+                st.markdown("---")
+                st.markdown("#### 🔍 Cari Desa")
+                
+                col_search1, col_search2 = st.columns([3, 1])
+                
+                with col_search1:
+                    # Buat list desa untuk autocomplete
+                    desa_list = sorted(data_gdf_merged['NAMOBJ'].dropna().unique().tolist())
+                    
+                    search_query = st.selectbox(
+                        "Pilih atau ketik nama desa:",
+                        options=[""] + desa_list,
+                        index=0,
+                        help="Ketik untuk mencari atau pilih dari dropdown"
+                    )
+                
+                with col_search2:
+                    clear_search = st.button("🔄 Reset", use_container_width=True)
+                
+                # Jika tombol reset diklik
+                if clear_search:
+                    search_query = ""
+                    st.rerun()
+                
+                # ==================== END FITUR PENCARIAN ====================
+                
                 # Hitung bounds untuk zoom otomatis ke wilayah Kuningan
                 bounds = data_gdf_merged.total_bounds  # [minx, miny, maxx, maxy]
                 center_lat = (bounds[1] + bounds[3]) / 2
                 center_lon = (bounds[0] + bounds[2]) / 2
                 
-                # Buat peta Folium dengan tiles yang lebih bagus
-                m = folium.Map(
-                    location=[center_lat, center_lon], 
-                    zoom_start=11,
-                    tiles='CartoDB positron',  # Tiles yang lebih bersih
-                    control_scale=True,
-                    zoom_control=True,
-                    scrollWheelZoom=False,
-                    dragging=True
-                )
+                # Ambil jumlah kecamatan dan desa dari data ETL (df_fact)
+                jumlah_kecamatan = 32
+                jumlah_desa_dengan_data = 361
                 
-                # Fungsi warna yang lebih detail
-                def get_color(persen_stunting):
-                    if persen_stunting == 0:
-                        return '#e0e0e0'
-                    elif persen_stunting < 5:
-                        return '#fff3cd'
-                    elif persen_stunting < 10:
-                        return '#ffcc80'
-                    elif persen_stunting < 15:
-                        return '#ff8c42'
-                    elif persen_stunting < 20:
-                        return '#ff6b6b'
-                    else:
-                        return '#d9534f'
+                # Layout: Peta di kiri (lebih besar), Legenda di kanan (lebih kecil)
+                col_map, col_legend = st.columns([9.5, 3])
                 
-                # Layer GeoJson dengan styling lebih baik
-                folium.GeoJson(
-                    data_gdf_merged,
-                    name="Stunting per Desa",
-                    style_function=lambda feature: {
-                        'fillColor': get_color(feature['properties'].get('persen_stunting', 0)),
-                        'color': '#34495e',
-                        'weight': 1.2,
-                        'fillOpacity': 0.8,
-                        'dashArray': '0'
-                    },
-                    highlight_function=lambda x: {
-                        'fillColor': '#667eea',
-                        'color': '#1a237e',
-                        'weight': 3,
-                        'fillOpacity': 0.9
-                    },
-                    tooltip=folium.GeoJsonTooltip(
-                        fields=['NAMOBJ', 'puskesmas', 'jumlah_ditimbang_d', 'sasaran_total', 'persentase_ds', 
-                                'jumlah_stunting', 'persen_stunting'],
-                        aliases=['🏘️ Desa:', '🏥 Puskesmas:', '⚖️ Ditimbang:', '🎯 Sasaran:', '📊 % Sasaran:', 
-                                 '📉 Jml Stunting:', '🔴 Prevalensi:'],
-                        localize=True,
-                        sticky=False,
-                        labels=True,
-                        style="""
-                            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-                            border: 3px solid #667eea;
-                            border-radius: 12px;
-                            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
-                            padding: 12px 16px;
-                            font-family: 'Poppins', sans-serif;
-                            font-weight: 500;
-                            font-size: 14px;
-                            max-width: 300px;
-                        """
+                with col_map:
+                    # Buat peta Folium dengan tiles yang lebih bagus
+                    m = folium.Map(
+                        location=[center_lat, center_lon], 
+                        zoom_start=11,
+                        tiles='CartoDB positron',  # Tiles yang lebih bersih
+                        control_scale=True,
+                        zoom_control=True,
+                        scrollWheelZoom=False,
+                        dragging=True
                     )
-                ).add_to(m)
+                    
+                    # Fungsi warna yang lebih detail
+                    def get_color(persen_stunting):
+                        if persen_stunting == 0:
+                            return '#e0e0e0'
+                        elif persen_stunting < 5:
+                            return '#fff3cd'
+                        elif persen_stunting < 10:
+                            return '#ffcc80'
+                        elif persen_stunting < 15:
+                            return '#ff8c42'
+                        elif persen_stunting < 20:
+                            return '#ff6b6b'
+                        else:
+                            return '#d9534f'
+                    
+                    # Layer GeoJson dengan styling lebih baik
+                    folium.GeoJson(
+                        data_gdf_merged,
+                        name="Stunting per Desa",
+                        style_function=lambda feature: {
+                            'fillColor': get_color(feature['properties'].get('persen_stunting', 0)),
+                            'color': '#34495e',
+                            'weight': 1.2,
+                            'fillOpacity': 0.8,
+                            'dashArray': '0'
+                        },
+                        highlight_function=lambda x: {
+                            'fillColor': '#667eea',
+                            'color': '#1a237e',
+                            'weight': 3,
+                            'fillOpacity': 0.9
+                        },
+                        tooltip=folium.GeoJsonTooltip(
+                            fields=['NAMOBJ', 'WADMKC','puskesmas', 'jumlah_ditimbang_d', 'sasaran_total', 'persentase_ds', 
+                                    'jumlah_stunting', 'persen_stunting'],
+                            aliases=['🏘️ Desa:', '🏘️ Kecamatan','🏥 Puskesmas:', '⚖️ Ditimbang (D):', '🎯 Sasaran (S):', '📊 % Sasaran (D/S):', 
+                                     '📉 Jml Stunting (JS):', '🔴 Prevalensi (JS/D):'],
+                            localize=True,
+                            sticky=False,
+                            labels=True,
+                            style="""
+                                background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+                                border: 3px solid #667eea;
+                                border-radius: 12px;
+                                box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+                                padding: 12px 16px;
+                                font-family: 'Poppins', sans-serif;
+                                font-weight: 500;
+                                font-size: 14px;
+                                max-width: 300px;
+                            """
+                        )
+                    ).add_to(m)
+                    
+                    # Tambahkan label kecamatan di peta
+                    if 'WADMKC' in data_gdf_merged.columns:
+                        # Agregasi per kecamatan untuk mendapatkan centroid
+                        kecamatan_centroids = data_gdf_merged.groupby('WADMKC').apply(
+                            lambda x: x.geometry.unary_union.centroid
+                        ).reset_index()
+                        kecamatan_centroids.columns = ['WADMKC', 'centroid']
+                        
+                        # Tambahkan marker untuk setiap kecamatan
+                        for idx, row in kecamatan_centroids.iterrows():
+                            folium.Marker(
+                                location=[row['centroid'].y, row['centroid'].x],
+                                icon=folium.DivIcon(html=f"""
+                                    <div style="
+                                        font-family: Arial, sans-serif;
+                                        font-size: 10px;
+                                        font-weight: 700;
+                                        color: #2c3e50;
+                                        text-shadow: 
+                                            -1px -1px 0 rgba(255, 255, 255, 0.9),
+                                            1px -1px 0 rgba(255, 255, 255, 0.9),
+                                            -1px 1px 0 rgba(255, 255, 255, 0.9),
+                                            1px 1px 0 rgba(255, 255, 255, 0.9),
+                                            0 0 3px rgba(255, 255, 255, 0.7);
+                                        white-space: nowrap;
+                                        text-align: center;
+                                        text-transform: uppercase;
+                                        letter-spacing: 0.5px;
+                                        transform: translateX(-50%);
+                                        margin-left: 50%;
+                                    ">
+                                        {row['WADMKC']}
+                                    </div>
+                                """)
+                            ).add_to(m)
+                    
+                    # Jika ada pencarian desa, tambahkan marker
+                    if search_query:
+                        search_result = data_gdf_merged[data_gdf_merged['NAMOBJ'] == search_query]
+                        
+                        if not search_result.empty:
+                            result = search_result.iloc[0]
+                            # Ambil centroid dari geometry desa
+                            centroid = result.geometry.centroid
+                            
+                            folium.Marker(
+                                location=[centroid.y, centroid.x],
+                                popup=folium.Popup(f"""
+                                    <div style='width: 200px; font-family: Poppins;'>
+                                        <h4 style='color: #667eea; margin: 0 0 10px 0;'>📍 {result['NAMOBJ']}</h4>
+                                        <b>Prevalensi:</b> {result['persen_stunting']:.2f}%<br>
+                                        <b>Stunting:</b> {int(result['jumlah_stunting'])} balita<br>
+                                        <b>Puskesmas:</b> {result['puskesmas']}
+                                    </div>
+                                """, max_width=250),
+                                icon=folium.Icon(color='red', icon='info-sign', prefix='glyphicon'),
+                                tooltip=f"📍 {result['NAMOBJ']}"
+                            ).add_to(m)
+                            
+                            # Zoom ke desa yang dicari
+                            m.fit_bounds([[centroid.y - 0.02, centroid.x - 0.02], 
+                                          [centroid.y + 0.02, centroid.x + 0.02]])
+                        else:
+                            # Fit bounds agar hanya menampilkan wilayah Kuningan
+                            m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
+                    else:
+                        # Fit bounds agar hanya menampilkan wilayah Kuningan
+                        m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
+                    
+                    # Legend prevalensi stunting
+                    legend_html = '''
+                    <div style="position: fixed; 
+                                bottom: 50px; left: 50px; width: 220px; 
+                                background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%); 
+                                border: 3px solid #667eea; 
+                                border-radius: 16px;
+                                z-index: 9999; 
+                                padding: 18px;
+                                box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+                                font-family: 'Poppins', sans-serif;">
+
+                    <p style="margin: 0 0 12px 0; font-weight: 700; font-size: 16px; color: #667eea; text-align: center;">
+                    📊 Prevalensi Stunting</p>
+
+                    <p style="margin: 6px 0;">
+                    <i style="background:#e0e0e0; width: 30px; height: 14px; 
+                    display: inline-block; border-radius: 4px; margin-right: 10px; border: 1px solid #ccc;"></i>
+                    <span style="font-size: 13px; font-weight: 500;">Tidak ada data</span>
+                    </p>
+
+                    <p style="margin: 6px 0;">
+                    <i style="background:#fff3cd; width: 30px; height: 14px; 
+                    display: inline-block; border-radius: 4px; margin-right: 10px; border: 1px solid #ffeeba;"></i>
+                    <span style="font-size: 13px; font-weight: 500;">&lt; 5% (Sangat Rendah)</span>
+                    </p>
+
+                    <p style="margin: 6px 0;">
+                    <i style="background:#ffcc80; width: 30px; height: 14px; 
+                    display: inline-block; border-radius: 4px; margin-right: 10px; border: 1px solid #ffb84d;"></i>
+                    <span style="font-size: 13px; font-weight: 500;">5–15% (Sedang)</span>
+                    </p>
+
+                    <p style="margin: 6px 0;">
+                    <i style="background:#ff6b6b; width: 30px; height: 14px; 
+                    display: inline-block; border-radius: 4px; margin-right: 10px; border: 1px solid #ff5252;"></i>
+                    <span style="font-size: 13px; font-weight: 500;">15–20% (Tinggi)</span>
+                    </p>
+
+                    <p style="margin: 6px 0;">
+                    <i style="background:#d9534f; width: 30px; height: 14px; 
+                    display: inline-block; border-radius: 4px; margin-right: 10px; border: 1px solid #c9302c;"></i>
+                    <span style="font-size: 13px; font-weight: 500;">&gt; 20% (Sangat Tinggi)</span>
+                    </p>
+
+                    </div>
+                    '''
+                    m.get_root().html.add_child(folium.Element(legend_html))
+                    
+                    # Tampilkan peta dengan ukuran lebih besar
+                    st_folium(m, width=1200, height=800, returned_objects=[])
                 
-                # Fit bounds agar hanya menampilkan wilayah Kuningan
-                m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
-                
-                # Legend yang lebih informatif
-                legend_html = '''
-                <div style="position: fixed; 
-                            bottom: 50px; left: 50px; width: 220px; 
-                            background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%); 
-                            border: 3px solid #667eea; 
-                            border-radius: 16px;
-                            z-index: 9999; 
-                            padding: 18px;
-                            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
-                            font-family: 'Poppins', sans-serif;">
-
-                <p style="margin: 0 0 12px 0; font-weight: 700; font-size: 16px; color: #667eea; text-align: center;">
-                📊 Prevalensi Stunting</p>
-
-                <p style="margin: 6px 0;">
-                <i style="background:#e0e0e0; width: 30px; height: 14px; 
-                display: inline-block; border-radius: 4px; margin-right: 10px; border: 1px solid #ccc;"></i>
-                <span style="font-size: 13px; font-weight: 500;">Tidak ada data</span>
-                </p>
-
-                <p style="margin: 6px 0;">
-                <i style="background:#d4edda; width: 30px; height: 14px; 
-                display: inline-block; border-radius: 4px; margin-right: 10px; border: 1px solid #c3e6cb;"></i>
-                <span style="font-size: 13px; font-weight: 500;">&lt; 5% (Sangat Rendah)</span>
-                </p>
-
-                <p style="margin: 6px 0;">
-                <i style="background:#fff3cd; width: 30px; height: 14px; 
-                display: inline-block; border-radius: 4px; margin-right: 10px; border: 1px solid #ffeeba;"></i>
-                <span style="font-size: 13px; font-weight: 500;">5–10% (Rendah)</span>
-                </p>
-
-                <p style="margin: 6px 0;">
-                <i style="background:#ffcc80; width: 30px; height: 14px; 
-                display: inline-block; border-radius: 4px; margin-right: 10px; border: 1px solid #ffb84d;"></i>
-                <span style="font-size: 13px; font-weight: 500;">10–20% (Tinggi)</span>
-                </p>
-
-                <p style="margin: 6px 0;">
-                <i style="background:#d9534f; width: 30px; height: 14px; 
-                display: inline-block; border-radius: 4px; margin-right: 10px; border: 1px solid #c9302c;"></i>
-                <span style="font-size: 13px; font-weight: 500;">&gt; 20% (Sangat Tinggi)</span>
-                </p>
-
-                </div>
-                '''
-                m.get_root().html.add_child(folium.Element(legend_html))
-                
-                # Tampilkan peta di tengah menggunakan kolom
-                col1, col2, col3 = st.columns([0.5, 3, 0.5])
-                with col2:
-                    st_folium(m, width=1400, height=800, returned_objects=[])
+                with col_legend:
+                    # Informasi Kabupaten Kuningan
+                    st.markdown("""
+                    <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                padding: 20px; border-radius: 12px; color: white; 
+                                box-shadow: 0 4px 15px rgba(0,0,0,0.2);'>
+                        <h3 style='margin: 0; text-align: center; color: white; font-size: 18px;'>
+                        📍 Kabupaten Kuningan</h3>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    # Batas Wilayah
+                    st.markdown("""
+                    <div style='background: white; padding: 15px; border-radius: 10px; 
+                                border: 2px solid #667eea; margin-bottom: 15px;'>
+                        <h4 style='color: #667eea; margin: 0 0 10px 0; font-size: 15px;'>🗺️ Batas Wilayah</h4>
+                        <p style='margin: 5px 0; font-size: 12px;'>
+                            <b>Utara:</b><br>Kab. Cirebon & Majalengka
+                        </p>
+                        <p style='margin: 5px 0; font-size: 12px;'>
+                            <b>Timur:</b><br>Kab. Brebes
+                        </p>
+                        <p style='margin: 5px 0; font-size: 12px;'>
+                            <b>Selatan:</b><br>Kab. Cilacap
+                        </p>
+                        <p style='margin: 5px 0; font-size: 12px;'>
+                            <b>Barat:</b><br>Kab. Majalengka
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Statistik Wilayah
+                    st.markdown(f"""
+                    <div style='background: white; padding: 15px; border-radius: 10px; 
+                                border: 2px solid #667eea;'>
+                        <h4 style='color: #667eea; margin: 0 0 10px 0; font-size: 15px;'>📊 Statistik Wilayah</h4>
+                        <div style='background: #f8f9fa; padding: 10px; border-radius: 8px; margin: 8px 0;'>
+                            <p style='margin: 0; font-size: 12px;'><b>Jumlah Kecamatan:</b></p>
+                            <p style='margin: 5px 0 0 0; font-size: 22px; font-weight: bold; color: #667eea;'>
+                                {jumlah_kecamatan}
+                            </p>
+                        </div>
+                        <div style='background: #f8f9fa; padding: 10px; border-radius: 8px; margin: 8px 0;'>
+                            <p style='margin: 0; font-size: 12px;'><b>Jumlah Desa:<br></b></p>
+                            <p style='margin: 5px 0 0 0; font-size: 22px; font-weight: bold; color: #667eea;'>
+                                {jumlah_desa_dengan_data}
+                            </p>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 
                 st.markdown("---")
                 
@@ -1167,7 +1402,7 @@ else:
                 with st.spinner("🔄 Membuat peta statis untuk download..."):
                     map_img_bytes = create_static_map_image(
                         data_gdf_merged, 
-                        "Peta Sebaran Stunting Per Desa - Kabupaten Kuningan"
+                        "PETA SEBARAN STUNTING PER DESA - KABUPATEN KUNINGAN BULAN " f"{pilih_bulan}" 
                     )
                     if map_img_bytes:
                         create_download_button_for_map(map_img_bytes, "peta_sebaran_stunting_kuningan")
@@ -1180,108 +1415,21 @@ else:
                     <b>💡 Cara Membaca Peta</b><br><br>
                     🎨 <b>Warna wilayah</b> menunjukkan tingkat prevalensi stunting (semakin gelap merah, semakin tinggi prevalensi)<br><br>
                     🖱️ <b>Klik pada wilayah desa</b> untuk melihat informasi detail:<br>
-                    &nbsp;&nbsp;&nbsp;&nbsp;• Nama Desa & Puskesmas<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;• Nama Desa & Kecamatan<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;• Nama Puskesmas<br>
                     &nbsp;&nbsp;&nbsp;&nbsp;• Jumlah Balita Ditimbang & Sasaran<br>
                     &nbsp;&nbsp;&nbsp;&nbsp;• Persentase Pencapaian Sasaran<br>
                     &nbsp;&nbsp;&nbsp;&nbsp;• Jumlah & Prevalensi Stunting<br><br>
-                    🔍 <b>Gunakan scroll/zoom</b> untuk melihat detail wilayah tertentu
+                    🔍 <b>Gunakan scroll/zoom</b> untuk melihat detail wilayah tertentu<br><br>
+                    🔎 <b>Gunakan fitur pencarian di atas</b> untuk mencari desa tertentu dan melihat lokasinya di peta<br><br>
+                    🏘️ <b>Label kecamatan</b> ditampilkan langsung di peta untuk memudahkan identifikasi wilayah
                 </div>
                 """, unsafe_allow_html=True)
                 
                 st.markdown("---")
-                
-                # STATISTIK KOMPREHENSIF
-                st.markdown("### 📊 INSIGHT & ANALISIS DATA PETA")
-                
-                # Row 1: Statistik Umum
-                col1, col2, col3, col4 = st.columns(4)
-                
-                desa_dengan_data = len(data_gdf_merged[data_gdf_merged['jumlah_stunting'] > 0])
-                total_desa = len(data_gdf_merged)
-                coverage_pct = (desa_dengan_data / total_desa * 100) if total_desa > 0 else 0
-                
-                with col1:
-                    st.metric("🏘️ Desa dengan Data", f"{desa_dengan_data}/{total_desa}", f"{coverage_pct:.1f}%")
-                
-                with col2:
-                    avg_prevalensi = data_gdf_merged[data_gdf_merged['persen_stunting'] > 0]['persen_stunting'].mean()
-                    st.metric("📊 Rata-rata Prevalensi", f"{avg_prevalensi:.2f}%")
-                
-                with col3:
-                    max_prevalensi_desa = data_gdf_merged.loc[data_gdf_merged['persen_stunting'].idxmax()]
-                    st.metric("🔴 Prevalensi Tertinggi", 
-                             f"{max_prevalensi_desa['persen_stunting']:.2f}%",
-                             f"{max_prevalensi_desa['NAMOBJ']}")
-                
-                with col4:
-                    min_prevalensi = data_gdf_merged[data_gdf_merged['persen_stunting'] > 0]['persen_stunting'].min()
-                    min_prevalensi_desa = data_gdf_merged[data_gdf_merged['persen_stunting'] == min_prevalensi].iloc[0]
-                    st.metric("🟢 Prevalensi Terendah", 
-                             f"{min_prevalensi:.2f}%",
-                             f"{min_prevalensi_desa['NAMOBJ']}")
-                
-                st.markdown("---")
-                
-                # Row 2: Distribusi Kategori Desa
-                st.markdown("#### 📈 Jumlah Desa Berdasarkan Tingkat Stunting")
-                
-                # Kategorisasi desa
-                data_gdf_merged['kategori_desa'] = pd.cut(
-                    data_gdf_merged['persen_stunting'],
-                    bins=[0, 5, 10, 20, 100],
-                    labels=['Sangat Rendah (<5%)', 'Rendah (5-10%)', 'Tinggi (10-20%)', 
-                            'Sangat Tinggi (>20%)']
-                )
-                
-                kategori_desa_count = data_gdf_merged[data_gdf_merged['persen_stunting'] > 0]['kategori_desa'].value_counts().sort_index()
-                
-                col1, col2 = st.columns([1, 1])
-                
-                with col1:
-                    # Tabel kategori
-                    kategori_data = []
-                    for idx, (kategori, jumlah) in enumerate(kategori_desa_count.items()):
-                        persen = (jumlah / desa_dengan_data * 100) if desa_dengan_data > 0 else 0
-                        kategori_data.append({
-                            'Kategori': kategori,
-                            'Jumlah Desa': jumlah,
-                            'Persentase': f"{persen:.1f}%"
-                        })
-                    
-                    df_kategori = pd.DataFrame(kategori_data)
-                    st.dataframe(df_kategori, use_container_width=True, hide_index=True)
-                
-                with col2:
-                    # Pie chart
-                    fig_pie_kategori = go.Figure(data=[go.Pie(
-                        labels=kategori_desa_count.index,
-                        values=kategori_desa_count.values,
-                        hole=0.4,
-                        marker_colors=['#d4edda', '#fff3cd', '#ffcc80', '#ff8c42', '#ff6b6b', '#d9534f'],
-                        textinfo='label+percent',
-                        textfont=dict(size=11, family='Poppins'),
-                        hovertemplate='<b>%{label}</b><br>Jumlah: %{value} desa<br>Persentase: %{percent}<extra></extra>'
-                    )])
-                    
-                    fig_pie_kategori.update_layout(
-                        height=300,
-                        margin=dict(t=20, b=20, l=20, r=20),
-                        showlegend=False,
-                        paper_bgcolor='rgba(0,0,0,0)'
-                    )
-                    st.plotly_chart(fig_pie_kategori, use_container_width=True, config={'displayModeBar': False})
-                    
-                    # Tombol download grafik
-                    create_download_button_for_chart(
-                        fig_pie_kategori, 
-                        "distribusi_kategori_desa_stunting",
-                        "Distribusi Kategori Desa Berdasarkan Tingkat Stunting"
-                    )
-                
-                st.markdown("---")
-                
-                # Row 3: Top & Bottom Desa
-                col1, col2 = st.columns(2)
+                                
+                # Row 3: Top Desa, Kecamatan, dan Puskesmas
+                col1, col2, col3 = st.columns(3)
                 
                 with col1:
                     st.markdown("#### 🔴 10 Desa dengan Stunting Tertinggi")
@@ -1301,18 +1449,54 @@ else:
                             """, unsafe_allow_html=True)
                 
                 with col2:
-                    st.markdown("#### 🟢 10 Desa dengan Stunting Terendah")
-                    bottom_desa = data_gdf_merged[data_gdf_merged['persen_stunting'] > 0].nsmallest(10, 'persen_stunting')
+                    st.markdown("#### 🔴 10 Kecamatan dengan Stunting Tertinggi")
                     
-                    for idx, row in bottom_desa.iterrows():
+                    # Agregasi data per kecamatan
+                    if 'WADMKC' in data_gdf_merged.columns:
+                        kecamatan_col = 'WADMKC'
+                    else:
+                        kecamatan_col = 'puskesmas'
+                    
+                    kecamatan_agg = data_gdf_merged.groupby(kecamatan_col).agg({
+                        'jumlah_stunting': 'sum',
+                        'jumlah_ditimbang_d': 'sum'
+                    }).reset_index()
+                    
+                    kecamatan_agg['persen_stunting'] = (kecamatan_agg['jumlah_stunting'] / kecamatan_agg['jumlah_ditimbang_d'] * 100).fillna(0)
+                    top_kecamatan = kecamatan_agg[kecamatan_agg['persen_stunting'] > 0].nlargest(10, 'persen_stunting')
+                    
+                    for idx, row in top_kecamatan.iterrows():
                         with st.container():
                             st.markdown(f"""
-                            <div style='background: linear-gradient(135deg, #f0fff4 0%, #d4edda 100%); 
+                            <div style='background: linear-gradient(135deg, #fff5f5 0%, #ffe0e0 100%); 
                                         padding: 10px; border-radius: 8px; margin: 5px 0; 
-                                        border-left: 4px solid #28a745;'>
-                                <b style='color: #28a745;'>{row['NAMOBJ']}</b> 
-                                <span style='color: #666;'>(Puskesmas {row['puskesmas']})</span><br>
-                                <span style='font-size: 18px; font-weight: 700; color: #28a745;'>{row['persen_stunting']:.2f}%</span> 
+                                        border-left: 4px solid #d9534f;'>
+                                <b style='color: #d9534f;'>{row[kecamatan_col]}</b><br>
+                                <span style='font-size: 18px; font-weight: 700; color: #d9534f;'>{row['persen_stunting']:.2f}%</span> 
+                                <span style='color: #666;'>• {int(row['jumlah_stunting'])} dari {int(row['jumlah_ditimbang_d'])} balita</span>
+                            </div>
+                            """, unsafe_allow_html=True)
+                
+                with col3:
+                    st.markdown("#### 🔴 10 Puskesmas dengan Stunting Tertinggi")
+                    
+                    # Agregasi data per puskesmas
+                    puskesmas_agg = data_gdf_merged.groupby('puskesmas').agg({
+                        'jumlah_stunting': 'sum',
+                        'jumlah_ditimbang_d': 'sum'
+                    }).reset_index()
+                    
+                    puskesmas_agg['persen_stunting'] = (puskesmas_agg['jumlah_stunting'] / puskesmas_agg['jumlah_ditimbang_d'] * 100).fillna(0)
+                    top_puskesmas = puskesmas_agg[puskesmas_agg['persen_stunting'] > 0].nlargest(10, 'persen_stunting')
+                    
+                    for idx, row in top_puskesmas.iterrows():
+                        with st.container():
+                            st.markdown(f"""
+                            <div style='background: linear-gradient(135deg, #fff5f5 0%, #ffe0e0 100%); 
+                                        padding: 10px; border-radius: 8px; margin: 5px 0; 
+                                        border-left: 4px solid #d9534f;'>
+                                <b style='color: #d9534f;'>{row['puskesmas']}</b><br>
+                                <span style='font-size: 18px; font-weight: 700; color: #d9534f;'>{row['persen_stunting']:.2f}%</span> 
                                 <span style='color: #666;'>• {int(row['jumlah_stunting'])} dari {int(row['jumlah_ditimbang_d'])} balita</span>
                             </div>
                             """, unsafe_allow_html=True)
@@ -1322,185 +1506,140 @@ else:
                 st.info("📁 Pastikan file shapefile tersedia di folder 'data/ADMINISTRASIDESA_AR_25K.shp'")
         
         with tab2:
-            waktu_info = f"{df_waktu['tanggal'].iloc[0]} {df_waktu['bulan'].iloc[0]} {df_waktu['tahun'].iloc[0]}"
-            st.markdown("### 📊 PERBANDINGAN ANTAR WILAYAH " f"{waktu_info}")
+            waktu_info = f"Bulan {st.session_state.pilih_bulan} (Penarikan: {st.session_state.tanggal_penarikan_str})"            
+            st.markdown(f"### 📊 PERBANDINGAN ANTAR WILAYAH BULAN "f"{pilih_bulan}")
             
             # Filter untuk memilih level perbandingan
-            col_filter1, col_filter2 = st.columns([1, 3])
-            with col_filter1:
-                level_perbandingan = st.selectbox(
-                    "📍 Tampilkan Data:",
-                    ["Kecamatan", "Desa"],
-                    key="level_perbandingan"
-                )
-            
-            # Filter kecamatan jika memilih level Desa
-            selected_kecamatan = None
-            if level_perbandingan == "Desa":
-                with col_filter2:
-                    kecamatan_list = ['Semua Kecamatan'] + sorted(df_fact['puskesmas'].unique().tolist())
-                    selected_kecamatan = st.selectbox(
-                        "🏘️ Filter Kecamatan:",
-                        kecamatan_list,
-                        key="filter_kecamatan"
-                    )
+            level_perbandingan = st.selectbox(
+                "📍 Tampilkan Data:",
+                ["Puskesmas", "Kecamatan", "Desa"],
+                key="level_perbandingan"
+            )
             
             # Tentukan dataframe berdasarkan pilihan
-            if level_perbandingan == "Kecamatan":
+            if level_perbandingan == "Puskesmas":
                 df_display_source = df_agg.copy()
                 nama_kolom = 'nama_kecamatan'
                 jumlah_max = len(df_agg)
                 jumlah_default = min(15, jumlah_max)
-            else:  # Desa
-                if selected_kecamatan and selected_kecamatan != 'Semua Kecamatan':
-                    df_desa_filtered = df_fact[df_fact['puskesmas'] == selected_kecamatan].copy()
-                else:
-                    df_desa_filtered = df_fact.copy()
+            elif level_perbandingan == "Kecamatan":
+                # Load shapefile untuk mendapatkan data kecamatan
+                SHP_FILE_PATH = "data/ADMINISTRASIDESA_AR_25K.shp"
+                data_gdf = load_shapefile(SHP_FILE_PATH)
                 
+                if data_gdf is not None:
+                    # Merge df_fact dengan shapefile untuk mendapatkan kecamatan
+                    df_fact['desa_normalized'] = df_fact['desa'].str.strip().str.upper()
+                    data_gdf['NAMOBJ_normalized'] = data_gdf['NAMOBJ'].str.strip().str.upper()
+                    
+                    df_with_kec = df_fact.merge(
+                        data_gdf[['NAMOBJ_normalized', 'WADMKC']],
+                        left_on='desa_normalized',
+                        right_on='NAMOBJ_normalized',
+                        how='left'
+                    )
+                    
+                    # Agregasi per kecamatan
+                    df_kec_agg = df_with_kec.groupby('WADMKC').agg({
+                        'jumlah_ditimbang_d': 'sum',
+                        'jumlah_stunting': 'sum'
+                    }).reset_index()
+                    
+                    df_kec_agg['persentase_stunting'] = (df_kec_agg['jumlah_stunting'] / df_kec_agg['jumlah_ditimbang_d'] * 100).fillna(0)
+                    df_kec_agg.columns = ['nama_kecamatan', 'jumlah_balita_ditimbang', 'jumlah_balita_stunting', 'persentase_stunting']
+                    
+                    df_display_source = df_kec_agg.copy()
+                    nama_kolom = 'nama_kecamatan'
+                    jumlah_max = len(df_kec_agg)
+                    jumlah_default = min(15, jumlah_max)
+                else:
+                    st.error("⚠️ Shapefile tidak ditemukan. Tidak dapat menampilkan data per kecamatan.")
+                    df_display_source = pd.DataFrame()
+                    nama_kolom = 'nama_kecamatan'
+                    jumlah_max = 0
+                    jumlah_default = 0
+            else:  # Desa
                 # Agregasi untuk desa (karena df_fact sudah punya data per desa)
-                df_display_source = df_desa_filtered[['desa', 'jumlah_ditimbang_d', 'jumlah_stunting', 'persen_stunting']].copy()
+                df_display_source = df_fact[['desa', 'jumlah_ditimbang_d', 'jumlah_stunting', 'persen_stunting']].copy()
                 df_display_source.columns = ['nama_desa', 'jumlah_balita_ditimbang', 'jumlah_balita_stunting', 'persentase_stunting']
                 
                 nama_kolom = 'nama_desa'
                 jumlah_max = len(df_display_source)
                 jumlah_default = min(15, jumlah_max)
             
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                jumlah_tampil = st.slider(
-                    "🔢 Jumlah yang ditampilkan:", 
-                    min_value=5, 
-                    max_value=max(jumlah_max, 5), 
-                    value=jumlah_default,
-                    key="jumlah_slider"
-                )
-            with col2:
-                urutan = st.radio("📈 Urutan:", ["Tertinggi", "Terendah"], key="urutan_radio")
-            
-            st.markdown(f"#### 📊 Top {level_perbandingan} - Stunting {urutan} " f"{waktu_info}")
-            
-            # Sorting berdasarkan urutan
-            if urutan == "Tertinggi":
-                df_display = df_display_source.nlargest(jumlah_tampil, 'persentase_stunting')
-            else:
-                df_display = df_display_source.nsmallest(jumlah_tampil, 'persentase_stunting')
-            
-            # Membuat grafik
-            fig_bar = go.Figure()
-            
-            fig_bar.add_trace(go.Bar(
-                y=df_display[nama_kolom],
-                x=df_display['persentase_stunting'],
-                orientation='h',
-                text=[f"{persen:.1f}% ({int(jml)} balita)" 
-                    for persen, jml in zip(df_display['persentase_stunting'], df_display['jumlah_balita_stunting'])],
-                textposition='outside',
-                marker=dict(
-                    color=df_display['persentase_stunting'],
-                    colorscale=[[0, '#fff3cd'], [0.5, '#ff8c42'], [1, '#d9534f']],
-                    showscale=True,
-                    colorbar=dict(
-                        title=dict(
-                            text="Persentase (%)",
-                            font=dict(size=12, family='Poppins')
-                        ),
-                        tickfont=dict(size=11, family='Poppins')
+            if not df_display_source.empty:
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    jumlah_tampil = st.slider(
+                        "🔢 Jumlah yang ditampilkan:", 
+                        min_value=5, 
+                        max_value=max(jumlah_max, 5), 
+                        value=jumlah_default,
+                        key="jumlah_slider"
                     )
-                ),
-                hovertemplate='<b>%{y}</b><br>Persentase: %{x:.2f}%<br><extra></extra>'
-            ))
-            
-            fig_bar.update_layout(
-                height=max(450, jumlah_tampil * 35),
-                xaxis_title='Persentase Stunting (%)',
-                yaxis_title='',
-                yaxis={'categoryorder':'total ascending' if urutan == "Tertinggi" else 'total descending'},
-                font=dict(size=12, family='Poppins'),
-                margin=dict(l=150, r=150, t=30, b=50),
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)'
-            )
-            st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
-            
-            # Tombol download grafik
-            create_download_button_for_chart(
-                fig_bar, 
-                f"top_{level_perbandingan.lower()}_stunting_{urutan.lower()}",
-                f"Top {jumlah_tampil} {level_perbandingan} dengan Stunting {urutan}"
-            )
-            
-            st.markdown("---")
-            
-            st.markdown("#### 📊 Perbandingan Indikator Gizi (Stunting, Kurang Gizi, Wasting) " f"{waktu_info}")
-            
-            df_compare = df_agg.sort_values('persentase_stunting', ascending=False).head(15)
-            
-            fig_compare = go.Figure()
-            
-            fig_compare.add_trace(go.Bar(
-                name='Stunting',
-                x=df_compare['nama_kecamatan'],
-                y=df_compare['persentase_stunting'],
-                text=[f"{val:.1f}%" for val in df_compare['persentase_stunting']],
-                textposition='outside',
-                marker_color='#d9534f',
-                hovertemplate='<b>%{x}</b><br>Stunting: %{y:.2f}%<extra></extra>'
-            ))
-            fig_compare.add_trace(go.Bar(
-                name='Kurang Gizi',
-                x=df_compare['nama_kecamatan'],
-                y=df_compare['persentase_kurang_gizi'],
-                text=[f"{val:.1f}%" for val in df_compare['persentase_kurang_gizi']],
-                textposition='outside',
-                marker_color='#f0ad4e',
-                hovertemplate='<b>%{x}</b><br>Kurang Gizi: %{y:.2f}%<extra></extra>'
-            ))
-            fig_compare.add_trace(go.Bar(
-                name='Wasting',
-                x=df_compare['nama_kecamatan'],
-                y=df_compare['persentase_wasting'],
-                text=[f"{val:.1f}%" for val in df_compare['persentase_wasting']],
-                textposition='outside',
-                marker_color='#9b59b6',
-                hovertemplate='<b>%{x}</b><br>Wasting: %{y:.2f}%<extra></extra>'
-            ))
-            
-            fig_compare.update_layout(
-                barmode='group',
-                height=550,
-                xaxis_tickangle=-45,
-                yaxis_title='Persentase (%)',
-                xaxis_title='Kecamatan',
-                legend=dict(
-                    orientation="h", 
-                    yanchor="bottom", 
-                    y=1.02, 
-                    xanchor="right", 
-                    x=1,
-                    font=dict(size=12, family='Poppins')
-                ),
-                font=dict(size=11, family='Poppins'),
-                margin=dict(t=80, b=120),
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)'
-            )
-            st.plotly_chart(fig_compare, use_container_width=True, config={'displayModeBar': False})
-            
-            # Tombol download grafik
-            create_download_button_for_chart(
-                fig_compare, 
-                "perbandingan_indikator_gizi_kecamatan",
-                "Perbandingan Indikator Gizi (Stunting, Kurang Gizi, Wasting) Antar Kecamatan"
-            )
-        
+                with col2:
+                    urutan = st.radio("📈 Urutan:", ["Tertinggi", "Terendah"], key="urutan_radio")
+                
+                st.markdown(f"#### 📊 {level_perbandingan} dengan Kasus Stunting Tertinggi Bulan " f"{pilih_bulan}")
+                
+                # Sorting berdasarkan urutan
+                if urutan == "Tertinggi":
+                    df_display = df_display_source.nlargest(jumlah_tampil, 'persentase_stunting')
+                else:
+                    df_display = df_display_source.nsmallest(jumlah_tampil, 'persentase_stunting')
+                
+                # Membuat grafik
+                fig_bar = go.Figure()
+                
+                fig_bar.add_trace(go.Bar(
+                    y=df_display[nama_kolom],
+                    x=df_display['persentase_stunting'],
+                    orientation='h',
+                    text=[f"{persen:.1f}% ({int(jml)} balita)" 
+                        for persen, jml in zip(df_display['persentase_stunting'], df_display['jumlah_balita_stunting'])],
+                    textposition='outside',
+                    marker=dict(
+                        color=df_display['persentase_stunting'],
+                        colorscale=[[0, '#fff3cd'], [0.5, '#ff8c42'], [1, '#d9534f']],
+                        showscale=True,
+                        colorbar=dict(
+                            title=dict(
+                                text="Persentase (%)",
+                                font=dict(size=12, family='Poppins')
+                            ),
+                            tickfont=dict(size=11, family='Poppins')
+                        )
+                    ),
+                    hovertemplate='<b>%{y}</b><br>Persentase: %{x:.2f}%<br><extra></extra>'
+                ))
+                
+                fig_bar.update_layout(
+                    height=max(450, jumlah_tampil * 35),
+                    xaxis_title='Persentase Stunting (%)',
+                    yaxis_title='',
+                    yaxis={'categoryorder':'total ascending' if urutan == "Tertinggi" else 'total descending'},
+                    font=dict(size=12, family='Poppins'),
+                    margin=dict(l=150, r=150, t=30, b=50),
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)'
+                )
+                st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
+                
+                # Tombol download grafik
+                create_download_button_for_chart(
+                    fig_bar, 
+                    f"top_{level_perbandingan.lower()}_stunting_{urutan.lower()}",
+                    f"Top {jumlah_tampil} {level_perbandingan} dengan Stunting {urutan} {waktu_info}"
+                )
+                             
         with tab3:
-            waktu_info = f"{df_waktu['tanggal'].iloc[0]} {df_waktu['bulan'].iloc[0]} {df_waktu['tahun'].iloc[0]}"
-            st.markdown("### 🎯 SEBARAN STATUS GIZI BALITA " f"{waktu_info}")
+            waktu_info = f"Bulan {st.session_state.pilih_bulan} (Penarikan: {st.session_state.tanggal_penarikan_str})"            
+            st.markdown(f"### 🎯 SEBARAN STATUS GIZI BALITA KABUPATEN KUNINGAN")
             
-            col1, col2 = st.columns(2)
+            col1, col2 = st.columns([1, 1])
             
             with col1:
-                st.markdown("#### 📊 Komposisi Status Gizi Balita " f"{waktu_info}")
+                st.markdown(f"#### 📊 Komposisi Status Gizi Balita Bulan " f"{pilih_bulan}")
                 
                 total_normal = total_ditimbang - total_stunting - total_kurang_gizi - total_wasting
                 
@@ -1520,7 +1659,7 @@ else:
                 
                 fig_pie.update_layout(
                     height=500,
-                    title_text="Proporsi Masalah Gizi",
+                    title_text="",
                     title_font=dict(size=16, family='Poppins', color='#667eea'),
                     font=dict(size=12, family='Poppins'),
                     showlegend=True,
@@ -1540,67 +1679,154 @@ else:
                 create_download_button_for_chart(
                     fig_pie, 
                     "komposisi_status_gizi_balita",
-                    "Komposisi Status Gizi Balita di Kabupaten Kuningan"
+                    f"Komposisi Status Gizi Balita Bulan " f"{pilih_bulan}"
                 )
             
             with col2:
-                st.markdown("#### 📈 Puskesmas Berdasarkan Tingkat Stunting " f"{waktu_info}")
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+
                 
-                df_agg['kategori'] = pd.cut(
-                    df_agg['persentase_stunting'],
-                    bins=[0, 5, 10, 20, 100],
-                    labels=['Rendah (<5%)', 'Sedang (5-10%)', 'Tinggi (10-20%)', 'Sangat Tinggi (>20%)']
-                )
+                # Row 1: Stunting dan Underweight
+                col_card1, col_card2 = st.columns(2, gap="medium")
                 
-                kategori_count = df_agg['kategori'].value_counts().sort_index()
-                kategori_colors = ['#5cb85c', '#f0ad4e', '#ff8c42', '#d9534f']
+                with col_card1:
+                    # Card Stunting
+                    persen_stunting_total = (total_stunting / total_ditimbang * 100) if total_ditimbang > 0 else 0
+                    st.markdown(f"""
+                    <div style='background: linear-gradient(135deg, #fff5f5 0%, #ffe0e0 100%); 
+                                padding: 12px 15px; border-radius: 10px; 
+                                border-left: 4px solid #d9534f; box-shadow: 0 2px 8px rgba(0,0,0,0.08);'>
+                        <h4 style='color: #d9534f; margin: 0 0 8px 0; font-size: 14px;'>
+                            🔴 Stunting (S)
+                        </h4>
+                        <div style='display: flex; justify-content: space-between; align-items: center;'>
+                            <div>
+                                <p style='margin: 0; font-size: 10px; color: #888;'>Jumlah</p>
+                                <p style='margin: 2px 0 0 0; font-size: 20px; font-weight: 700; color: #d9534f;'>
+                                    {total_stunting:,}
+                                </p>
+                            </div>
+                            <div style='text-align: right;'>
+                                <p style='margin: 0; font-size: 10px; color: #888;'>Ditimbang (D)</p>
+                                <p style='margin: 2px 0 0 0; font-size: 16px; font-weight: 600; color: #666;'>
+                                    {total_ditimbang:,}
+                                </p>
+                            </div>
+                        </div>
+                        <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #ffcccc;'>
+                            <p style='margin: 0; font-size: 16px; font-weight: 700; color: #d9534f; text-align: center;'>
+                                {persen_stunting_total:.2f}% (S/D)
+                            </p>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 
-                fig_kategori = go.Figure(data=[go.Pie(
-                    labels=kategori_count.index,
-                    values=kategori_count.values,
-                    hole=0.5,
-                    marker_colors=kategori_colors,
-                    textinfo='label+percent',
-                    textfont=dict(size=13, family='Poppins', color='white'),
-                    hovertemplate='<b>%{label}</b><br>Jumlah: %{value} puskesmas<br>Persentase: %{percent}<extra></extra>'
-                )])
+                with col_card2:
+                    # Card Underweight (Kurang Gizi)
+                    persen_kurang_gizi_total = (total_kurang_gizi / total_ditimbang * 100) if total_ditimbang > 0 else 0
+                    st.markdown(f"""
+                    <div style='background: linear-gradient(135deg, #fff9f0 0%, #ffe8cc 100%); 
+                                padding: 12px 15px; border-radius: 10px; 
+                                border-left: 4px solid #f0ad4e; box-shadow: 0 2px 8px rgba(0,0,0,0.08);'>
+                        <h4 style='color: #f0ad4e; margin: 0 0 8px 0; font-size: 14px;'>
+                            🟡 Underweight (U)
+                        </h4>
+                        <div style='display: flex; justify-content: space-between; align-items: center;'>
+                            <div>
+                                <p style='margin: 0; font-size: 10px; color: #888;'>Jumlah</p>
+                                <p style='margin: 2px 0 0 0; font-size: 20px; font-weight: 700; color: #f0ad4e;'>
+                                    {total_kurang_gizi:,}
+                                </p>
+                            </div>
+                            <div style='text-align: right;'>
+                                <p style='margin: 0; font-size: 10px; color: #888;'>Ditimbang (D)</p>
+                                <p style='margin: 2px 0 0 0; font-size: 16px; font-weight: 600; color: #666;'>
+                                    {total_ditimbang:,}
+                                </p>
+                            </div>
+                        </div>
+                        <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #ffe0b3;'>
+                            <p style='margin: 0; font-size: 16px; font-weight: 700; color: #f0ad4e; text-align: center;'>
+                                {persen_kurang_gizi_total:.2f}% (U/D)
+                            </p>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 
-                fig_kategori.update_layout(
-                    height=500,
-                    title_text="Kategori Puskesmas",
-                    title_font=dict(size=16, family='Poppins', color='#667eea'),
-                    font=dict(size=12, family='Poppins'),
-                    showlegend=True,
-                    legend=dict(
-                        orientation="v",
-                        yanchor="middle",
-                        y=0.5,
-                        xanchor="left",
-                        x=1.02
-                    ),
-                    margin=dict(t=80, b=20, l=20, r=150),
-                    paper_bgcolor='rgba(0,0,0,0)'
-                )
-                st.plotly_chart(fig_kategori, use_container_width=True, config={'displayModeBar': False})
+                st.markdown("<br>", unsafe_allow_html=True)
                 
-                # Tombol download grafik
-                create_download_button_for_chart(
-                    fig_kategori, 
-                    "kategori_puskesmas_stunting",
-                    "Pengelompokan Puskesmas Berdasarkan Tingkat Stunting"
-                )
+                # Row 2: Wasting dan Normal
+                col_card3, col_card4 = st.columns(2, gap="medium")
+                
+                with col_card3:
+                    # Card Wasting
+                    persen_wasting_total = (total_wasting / total_ditimbang * 100) if total_ditimbang > 0 else 0
+                    st.markdown(f"""
+                    <div style='background: linear-gradient(135deg, #fff5f0 0%, #ffd9cc 100%); 
+                                padding: 12px 15px; border-radius: 10px; 
+                                border-left: 4px solid #ff8c42; box-shadow: 0 2px 8px rgba(0,0,0,0.08);'>
+                        <h4 style='color: #ff8c42; margin: 0 0 8px 0; font-size: 14px;'>
+                            🟠 Wasting (W)
+                        </h4>
+                        <div style='display: flex; justify-content: space-between; align-items: center;'>
+                            <div>
+                                <p style='margin: 0; font-size: 10px; color: #888;'>Jumlah</p>
+                                <p style='margin: 2px 0 0 0; font-size: 20px; font-weight: 700; color: #ff8c42;'>
+                                    {total_wasting:,}
+                                </p>
+                            </div>
+                            <div style='text-align: right;'>
+                                <p style='margin: 0; font-size: 10px; color: #888;'>Ditimbang (D)</p>
+                                <p style='margin: 2px 0 0 0; font-size: 16px; font-weight: 600; color: #666;'>
+                                    {total_ditimbang:,}
+                                </p>
+                            </div>
+                        </div>
+                        <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #ffccb3;'>
+                            <p style='margin: 0; font-size: 16px; font-weight: 700; color: #ff8c42; text-align: center;'>
+                                {persen_wasting_total:.2f}% (W/D)
+                            </p>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with col_card4:
+                    # Card Normal
+                    persen_normal_total = (total_normal / total_ditimbang * 100) if total_ditimbang > 0 else 0
+                    st.markdown(f"""
+                    <div style='background: linear-gradient(135deg, #f0f8ff 0%, #d9eeff 100%); 
+                                padding: 12px 15px; border-radius: 10px; 
+                                border-left: 4px solid #5bc0de; box-shadow: 0 2px 8px rgba(0,0,0,0.08);'>
+                        <h4 style='color: #5bc0de; margin: 0 0 8px 0; font-size: 14px;'>
+                            🔵 Normal (N)
+                        </h4>
+                        <div style='display: flex; justify-content: space-between; align-items: center;'>
+                            <div>
+                                <p style='margin: 0; font-size: 10px; color: #888;'>Jumlah</p>
+                                <p style='margin: 2px 0 0 0; font-size: 20px; font-weight: 700; color: #5bc0de;'>
+                                    {total_normal:,}
+                                </p>
+                            </div>
+                            <div style='text-align: right;'>
+                                <p style='margin: 0; font-size: 10px; color: #888;'>Ditimbang (D)</p>
+                                <p style='margin: 2px 0 0 0; font-size: 16px; font-weight: 600; color: #666;'>
+                                    {total_ditimbang:,}
+                                </p>
+                            </div>
+                        </div>
+                        <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #b3e0ff;'>
+                            <p style='margin: 0; font-size: 16px; font-weight: 700; color: #5bc0de; text-align: center;'>
+                                {persen_normal_total:.2f}% (N/D)
+                            </p>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)            
             
-            st.markdown("---")
-            st.markdown("#### 📍 Daftar Puskesmas Berdasarkan Kategori Prevalensi Stunting")
-            
-            for kategori in ['Rendah (<5%)', 'Sedang (5-10%)', 'Tinggi (10-20%)', 'Sangat Tinggi (>20%)']:
-                kec_list = df_agg[df_agg['kategori'] == kategori]['nama_kecamatan'].tolist()
-                if kec_list:
-                    emoji = '🟢' if 'Rendah' in kategori else '🟡' if 'Sedang' in kategori else '🟠' if 'Tinggi' in kategori else '🔴'
-                    with st.expander(f"{emoji} **{kategori}** ({len(kec_list)} puskesmas)"):
-                        st.markdown(", ".join(kec_list))
-            
-            st.markdown("---")
             st.markdown("""
             <div class="info-box">
                 <b>📚 Penjelasan Indikator Gizi</b><br><br>
@@ -1614,75 +1840,54 @@ else:
             """, unsafe_allow_html=True)
         
         with tab4:
-            waktu_info = f"{df_waktu['tanggal'].iloc[0]} {df_waktu['bulan'].iloc[0]} {df_waktu['tahun'].iloc[0]}"
-            st.markdown("### 📋 DATA DETAIL PER WILAYAH " f"{waktu_info}")
+            waktu_info = f"Bulan {st.session_state.pilih_bulan} (Penarikan: {st.session_state.tanggal_penarikan_str})"            
+            st.markdown(f"### 📋 DATA STUNTING PER WILAYAH KABUPATEN KUNINGAN DALAM TABLE BULAN "f"{pilih_bulan}")
             
-            # Filter untuk memilih level data
-            col_level, col_filter_kec = st.columns([1, 2])
-            with col_level:
-                level_data = st.selectbox(
-                    "📍 Tampilkan Data:",
-                    ["Per Puskesmas", "Per Desa"],
-                    key="level_data_table"
-                )
+            df_desa_table = df_fact.copy()
+
             
-            # Filter kecamatan jika memilih level Desa
-            filter_kecamatan_table = None
-            if level_data == "Per Desa":
-                with col_filter_kec:
-                    kecamatan_list_table = ['Semua Kecamatan'] + sorted(df_fact['puskesmas'].unique().tolist())
-                    filter_kecamatan_table = st.selectbox(
-                        "🏘️ Filter Kecamatan:",
-                        kecamatan_list_table,
-                        key="filter_kecamatan_table"
-                    )
+            # Load shapefile untuk mendapatkan data kecamatan
+            SHP_FILE_PATH = "data/ADMINISTRASIDESA_AR_25K.shp"
+            data_gdf = load_shapefile(SHP_FILE_PATH)
             
-            # Tentukan dataframe berdasarkan pilihan
-            if level_data == "Per Puskesmas":
-                df_display = df_agg.copy()
-                nama_kolom = 'nama_kecamatan'
-                label_wilayah = 'Puskesmas'
-                
-                # Tambahkan kategori jika belum ada
-                if 'kategori' not in df_display.columns:
-                    df_display['kategori'] = pd.cut(
-                        df_display['persentase_stunting'],
-                        bins=[0, 5, 10, 20, 100],
-                        labels=['Rendah (<5%)', 'Sedang (5-10%)', 'Tinggi (10-20%)', 'Sangat Tinggi (>20%)']
-                    )
-                
-            else:  # Per Desa
-                if filter_kecamatan_table and filter_kecamatan_table != 'Semua Kecamatan':
-                    df_desa_table = df_fact[df_fact['puskesmas'] == filter_kecamatan_table].copy()
-                else:
-                    df_desa_table = df_fact.copy()
-                
-                # Siapkan data desa dengan kolom yang sesuai
-                df_display = df_desa_table[['puskesmas', 'desa', 'sasaran_total', 'jumlah_ditimbang_d', 
-                                            'persentase_ds', 'jumlah_stunting', 'persen_stunting',
-                                            'jumlah_kurang_gizi', 'persen_kurang_gizi',
-                                            'jumlah_wasting', 'persen_wasting']].copy()
-                
-                df_display.columns = ['nama_kecamatan', 'nama_desa', 'sasaran_total', 'jumlah_balita_ditimbang',
-                                     'persentase_sasaran', 'jumlah_balita_stunting', 'persentase_stunting',
-                                     'jumlah_balita_kurang_gizi', 'persentase_kurang_gizi',
-                                     'jumlah_balita_wasting', 'persentase_wasting']
-                
-                nama_kolom = 'nama_desa'
-                label_wilayah = 'Desa'
-                
-                # Tambahkan kategori untuk desa
-                df_display['kategori'] = pd.cut(
-                    df_display['persentase_stunting'],
-                    bins=[0, 5, 10, 20, 100],
-                    labels=['Rendah (<5%)', 'Sedang (5-10%)', 'Tinggi (10-20%)', 'Sangat Tinggi (>20%)']
-                )
+            if data_gdf is not None:
+                # Buat mapping desa ke kecamatan dari shapefile
+                desa_kecamatan_map = data_gdf[['NAMOBJ', 'WADMKC']].copy()
+                desa_kecamatan_map['NAMOBJ'] = desa_kecamatan_map['NAMOBJ'].str.strip().str.upper()
+                desa_kecamatan_map = desa_kecamatan_map.drop_duplicates(subset=['NAMOBJ'])
+                desa_kecamatan_map = dict(zip(desa_kecamatan_map['NAMOBJ'], desa_kecamatan_map['WADMKC']))
+            else:
+                desa_kecamatan_map = {}
+            
+            # Siapkan data desa dengan kolom yang sesuai
+            df_display = df_desa_table[['desa', 'puskesmas', 'sasaran_total', 'jumlah_ditimbang_d', 
+                                        'persentase_ds', 'jumlah_stunting', 'persen_stunting',
+                                        'jumlah_kurang_gizi', 'persen_kurang_gizi',
+                                        'jumlah_wasting', 'persen_wasting']].copy()
+            
+            df_display.columns = ['nama_desa', 'nama_puskesmas', 'sasaran_total', 'jumlah_balita_ditimbang',
+                                'persentase_sasaran', 'jumlah_balita_stunting', 'persentase_stunting',
+                                'jumlah_balita_kurang_gizi', 'persentase_kurang_gizi',
+                                'jumlah_balita_wasting', 'persentase_wasting']
+            
+            # Tambahkan kolom kecamatan dari mapping shapefile
+            df_display['nama_kecamatan'] = df_display['nama_desa'].map(desa_kecamatan_map)
+            df_display['nama_kecamatan'] = df_display['nama_kecamatan'].fillna('N/A')
+            
+            # Tambahkan kategori untuk desa
+            df_display['kategori'] = pd.cut(
+                df_display['persentase_stunting'],
+                bins=[0, 5, 10, 20, 100],
+                labels=['Rendah (<5%)', 'Sedang (5-10%)', 'Tinggi (10-20%)', 'Sangat Tinggi (>20%)']
+            )
+            
+            st.markdown("---")
             
             col1, col2 = st.columns([3, 1])
             with col1:
                 search_term = st.text_input(
-                    f"🔍 Cari {label_wilayah.lower()}:", 
-                    placeholder=f"Ketik nama {label_wilayah.lower()}...",
+                    "🔍 Cari Desa:", 
+                    placeholder="Ketik nama desa...",
                     key="search_wilayah"
                 )
             with col2:
@@ -1694,11 +1899,11 @@ else:
             
             # Filter berdasarkan pencarian
             if search_term:
-                df_display = df_display[df_display[nama_kolom].str.contains(search_term.upper(), na=False)]
+                df_display = df_display[df_display['nama_desa'].str.contains(search_term.upper(), na=False)]
             
             # Sorting
             if sort_by == "Nama":
-                df_display = df_display.sort_values(nama_kolom)
+                df_display = df_display.sort_values('nama_desa')
             elif sort_by == "% Stunting":
                 df_display = df_display.sort_values('persentase_stunting', ascending=False)
             elif sort_by == "Jml Stunting":
@@ -1706,36 +1911,26 @@ else:
             else:
                 df_display = df_display.sort_values('jumlah_balita_ditimbang', ascending=False)
             
-            # Siapkan tabel untuk ditampilkan
-            if level_data == "Per Puskesmas":
-                df_table = df_display[[nama_kolom, 'sasaran_total', 'jumlah_balita_ditimbang', 
-                                       'persentase_sasaran', 'jumlah_balita_stunting', 
-                                       'persentase_stunting', 'jumlah_balita_kurang_gizi', 
-                                       'persentase_kurang_gizi', 'jumlah_balita_wasting', 
-                                       'persentase_wasting', 'kategori']].copy()
-                
-                df_table.columns = ['Puskesmas', 'Sasaran', 'Ditimbang', '% Sasaran', 'Jml Stunting', '% Stunting', 
-                                   'Jml Kurang Gizi', '% Kurang Gizi', 'Jml Wasting', '% Wasting', 'Kategori']
-            else:
-                df_table = df_display[['nama_kecamatan', nama_kolom, 'sasaran_total', 'jumlah_balita_ditimbang', 
-                                       'persentase_sasaran', 'jumlah_balita_stunting', 
-                                       'persentase_stunting', 'jumlah_balita_kurang_gizi', 
-                                       'persentase_kurang_gizi', 'jumlah_balita_wasting', 
-                                       'persentase_wasting', 'kategori']].copy()
-                
-                df_table.columns = ['Puskesmas', 'Desa', 'Sasaran', 'Ditimbang', '% Sasaran', 'Jml Stunting', '% Stunting', 
-                                   'Jml Kurang Gizi', '% Kurang Gizi', 'Jml Wasting', '% Wasting', 'Kategori']
+            # Siapkan tabel untuk ditampilkan dengan urutan: Desa, Kecamatan, Puskesmas
+            df_table = df_display[['nama_desa', 'nama_kecamatan', 'nama_puskesmas', 'sasaran_total', 'jumlah_balita_ditimbang', 
+                                'persentase_sasaran', 'jumlah_balita_stunting', 
+                                'persentase_stunting', 'jumlah_balita_kurang_gizi', 
+                                'persentase_kurang_gizi', 'jumlah_balita_wasting', 
+                                'persentase_wasting', 'kategori']].copy()
+            
+            df_table.columns = ['Desa', 'Kecamatan', 'Puskesmas', 'Sasaran (Sa)', 'Ditimbang (D)', 'Prevalensi Sasaran (D/Sa)', 'Stunting (S)', 'Prevalensi Stunting (S/D)', 
+                            'Underweight (U)', 'Prevalensi Underweight (U/D)', 'Wasting (W)', 'Prevalensi Wasting (W/D)', 'Kategori']
             
             # Format angka
-            df_table['Sasaran'] = df_table['Sasaran'].apply(lambda x: f"{int(x):,}")
-            df_table['Ditimbang'] = df_table['Ditimbang'].apply(lambda x: f"{int(x):,}")
-            df_table['% Sasaran'] = df_table['% Sasaran'].apply(lambda x: f"{x:.2f}%")
-            df_table['Jml Stunting'] = df_table['Jml Stunting'].apply(lambda x: f"{int(x):,}")
-            df_table['% Stunting'] = df_table['% Stunting'].apply(lambda x: f"{x:.2f}%")
-            df_table['Jml Kurang Gizi'] = df_table['Jml Kurang Gizi'].apply(lambda x: f"{int(x):,}")
-            df_table['% Kurang Gizi'] = df_table['% Kurang Gizi'].apply(lambda x: f"{x:.2f}%")
-            df_table['Jml Wasting'] = df_table['Jml Wasting'].apply(lambda x: f"{int(x):,}")
-            df_table['% Wasting'] = df_table['% Wasting'].apply(lambda x: f"{x:.2f}%")
+            df_table['Sasaran (Sa)'] = df_table['Sasaran (Sa)'].apply(lambda x: f"{int(x):,}")
+            df_table['Ditimbang (D)'] = df_table['Ditimbang (D)'].apply(lambda x: f"{int(x):,}")
+            df_table['Prevalensi Sasaran (D/Sa)'] = df_table['Prevalensi Sasaran (D/Sa)'].apply(lambda x: f"{x:.2f}%")
+            df_table['Stunting (S)'] = df_table['Stunting (S)'].apply(lambda x: f"{int(x):,}")
+            df_table['Prevalensi Stunting (S/D)'] = df_table['Prevalensi Stunting (S/D)'].apply(lambda x: f"{x:.2f}%")
+            df_table['Underweight (U)'] = df_table['Underweight (U)'].apply(lambda x: f"{int(x):,}")
+            df_table['Prevalensi Underweight (U/D)'] = df_table['Prevalensi Underweight (U/D)'].apply(lambda x: f"{x:.2f}%")
+            df_table['Wasting (W)'] = df_table['Wasting (W)'].apply(lambda x: f"{int(x):,}")
+            df_table['Prevalensi Wasting (W/D)'] = df_table['Prevalensi Wasting (W/D)'].apply(lambda x: f"{x:.2f}%")
             
             # Fungsi highlight berdasarkan kategori
             def highlight_kategori(row):
@@ -1753,12 +1948,8 @@ else:
             st.dataframe(df_styled, use_container_width=True, height=500)
             
             # Info jumlah data
-            total_data = len(df_agg) if level_data == "Per Puskesmas" else len(df_fact)
-            st.info(f"📊 Menampilkan **{len(df_display)}** dari **{total_data}** {label_wilayah.lower()}")
-            
-            # Informasi tambahan untuk mode desa
-            if level_data == "Per Desa" and filter_kecamatan_table and filter_kecamatan_table != 'Semua Kecamatan':
-                st.success(f"🏘️ Menampilkan data desa di Puskesmas **{filter_kecamatan_table}**")
+            total_data = len(df_fact)
+            st.info(f"📊 Menampilkan **{len(df_display)}** dari **{total_data}** desa")
         
         with tab5:
             st.markdown("### 💾 DOWNLOAD HASIL ETL DAN ANALISIS")
@@ -1840,12 +2031,12 @@ else:
 
         # Footer dengan styling baru
         st.markdown("---")
-        waktu_info = f"{df_waktu['tanggal'].iloc[0]} {df_waktu['bulan'].iloc[0]} {df_waktu['tahun'].iloc[0]}, Pukul {df_waktu['jam'].iloc[0]:02d}:{df_waktu['menit'].iloc[0]:02d}"
-        
+        waktu_info_bawah = f"{df_waktu['tanggal'].iloc[0]} {df_waktu['bulan'].iloc[0]} {df_waktu['tahun'].iloc[0]}"
         st.markdown(f"""
         <div class="footer-card">
             <h3>📅 Data Terakhir Diperbarui</h3>
-            <p style='font-size: 1.4rem; font-weight: 600; margin: 1rem 0;'>{waktu_info}</p>
+            <p style='font-size: 1.4rem; font-weight: 600; margin: 1rem 0;'>DATA STUNTING KABUPATEN KUNINGAN BULAN {pilih_bulan} </p>
+            <p style='font-size: 1.4rem; font-weight: 600; margin: 1rem 0;'>(Waktu Penarikan : {waktu_info_bawah} )</p>
             <p style='font-size: 1.1rem;'>🏥 Dinas Kesehatan Kabupaten Kuningan</p>
             <p style='font-size: 0.95rem; opacity: 0.9;'>Sistem Informasi Analisis Data Stunting</p>
         </div>
